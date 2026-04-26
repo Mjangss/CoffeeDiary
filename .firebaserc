@@ -1,5 +1,15 @@
 {
   "projects": {
     "default": "project-465199901526426309"
-  }
+  },
+  "targets": {
+    "project-465199901526426309": {
+      "hosting": {
+        "coffeediary": [
+          "coffeediary"
+        ]
+      }
+    }
+  },
+  "etags": {}
 }

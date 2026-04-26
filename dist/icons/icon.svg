@@ -1,0 +1,21 @@
+<svg width="512" height="512" viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="256" height="256" rx="48" fill="#09090B"/>
+  <path d="M0 32H256M0 64H256M0 96H256M0 128H256M0 160H256M0 192H256M0 224H256" stroke="white" stroke-opacity="0.05" stroke-width="0.5"/>
+  <path d="M32 0V256M64 0V256M96 0V256M128 0V256M160 0V256M192 0V256" stroke="white" stroke-opacity="0.05" stroke-width="0.5"/>
+  <g filter="url(#glow)">
+    <path d="M128 60C160 60 190 90 190 130C190 170 160 200 128 200C96 200 66 170 66 130C66 90 96 60 128 60Z" 
+          stroke="#fbbf24" stroke-width="2.5" stroke-dasharray="4 4"/>
+    <path d="M100 80Q128 130 156 180" stroke="#fbbf24" stroke-width="5" stroke-linecap="round"/>
+    <path d="M85 110Q128 130 171 150" stroke="#fbbf24" stroke-width="1.5" stroke-opacity="0.5"/>
+  </g>
+  <path d="M190 130H220M66 130H36" stroke="#fbbf24" stroke-width="0.8" stroke-opacity="0.4"/>
+  <path d="M128 60V30" stroke="#fbbf24" stroke-width="0.8" stroke-opacity="0.4"/>
+  <text x="40" y="45" fill="#fbbf24" font-family="monospace" font-size="10" font-weight="bold" opacity="0.6">BEAN_ID: CD-01</text>
+  <text x="180" y="225" fill="#fbbf24" font-family="monospace" font-size="10" font-weight="bold" opacity="0.6">EXT_92%</text>
+  <defs>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="4" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+  </defs>
+</svg>
