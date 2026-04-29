@@ -35,12 +35,23 @@ export const parseTypedNumber = (raw: string) => {
 
 export const safeNum = (value: unknown, fallback: number) => (typeof value === "number" && Number.isFinite(value) ? value : fallback);
 
+/**
+ * 저장된 값이 구버전 100점 만점 형식(>10)이면 10점 만점으로 변환하고,
+ * step과 범위(0~MAX_CUP_SCORE)에 맞게 정규화한다.
+ *
+ * @param value - 원시 점수 값 (unknown 타입 허용)
+ * @param fallback - 파싱 실패 시 기본값
+ */
 export const normalizeCupScoreValue = (value: unknown, fallback = DEFAULT_CUP_SCORES.acidity) => {
   const parsed = safeNum(value, fallback);
   const scaled = parsed > MAX_CUP_SCORE ? parsed / 10 : parsed;
   return clamp(toStep(scaled, CUP_SCORE_STEP), 0, MAX_CUP_SCORE);
 };
 
+/**
+ * 원두·추출방식·그라인더·드리퍼·스위치 여부 조합으로 그라인더 프로파일 키를 생성한다.
+ * 이 키는 profiles 레코드의 인덱스로 사용된다.
+ */
 export const keyOf = (bean: string, method: BrewMethod, grinder: Grinder, dripper: Dripper, switchApplied: boolean) => {
   const brewContext = method === "Brew" ? `${dripper}::${switchApplied ? "switch" : "plain"}` : "espresso";
   return `${bean.trim().toLowerCase()}::${method}::${grinder}::${brewContext}`;
@@ -129,6 +140,17 @@ export const parseTimeToSeconds = (timeStr: string) => {
   return (isNaN(m) ? 0 : m) * 60 + (isNaN(s) ? 0 : s);
 };
 
+/**
+ * 로스팅 날짜 기준으로 실제 숙성 일수를 계산한다.
+ * 냉동 보관 기간(frozenDurationMs)은 숙성 시간에서 제외되며,
+ * 현재 냉동 중(isFrozen)이면 냉동 시작 시점(lastFrozenAt)을 기준으로 계산한다.
+ *
+ * @param roastDate - 로스팅 날짜 (ISO 문자열)
+ * @param frozenDurationMs - 누적 냉동 시간 (ms)
+ * @param lastFrozenAt - 마지막으로 냉동을 시작한 시점 (ISO 문자열, optional)
+ * @param isFrozen - 현재 냉동 상태 여부
+ * @returns 실효 숙성 일수 (0~365 범위로 클램핑)
+ */
 export const calcRestDays = (roastDate: string, frozenDurationMs: number = 0, lastFrozenAt?: string, isFrozen: boolean = false) => {
   const roastTime = new Date(roastDate).getTime();
   if (Number.isNaN(roastTime)) return 0;
@@ -155,6 +177,14 @@ export const getAgingStatusDetail = (bean: BeanInfo, overrideRestDays?: number) 
   return `피크 종료 ${restDays - bean.peakEnd}일 지남`;
 };
 
+/**
+ * 배경색에 대비되는 전경색을 반환한다.
+ * HEX(#rrggbb)와 hsl() 형식을 지원하며, 상대 밝기(luminance) 기준으로
+ * 밝은 색상이면 어두운 CSS 변수, 어두운 색상이면 밝은 CSS 변수를 반환한다.
+ *
+ * @param color - HEX 또는 hsl() 형식의 색상 문자열
+ * @returns CSS 변수 문자열 ('var(--bg-deep)' | 'var(--text-strong)')
+ */
 export const getContrastColor = (color: string) => {
   let r = 255, g = 255, b = 255;
   if (color.startsWith("#")) {

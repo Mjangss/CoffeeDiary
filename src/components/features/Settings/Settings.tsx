@@ -29,6 +29,12 @@ const Settings: React.FC = () => {
   const { saveToCloud, loadFromCloud } = useFirebase();
   const [settingsKey, setSettingsKey] = useState(0);
 
+  // 그라인더 추가 폼 로컬 상태
+  const [newGrinderName, setNewGrinderName] = useState("");
+  const [newGrinderMin, setNewGrinderMin] = useState("");
+  const [newGrinderMax, setNewGrinderMax] = useState("");
+  const [newGrinderStep, setNewGrinderStep] = useState("");
+
   // Auto-save to cloud when entering Settings
   React.useEffect(() => {
     if (user) {
@@ -138,20 +144,22 @@ const Settings: React.FC = () => {
                  ))}
                </div>
                <div className="pt-4 border-t border-[var(--border-main)] grid gap-2">
-                 <input id="new-grinder-name" placeholder="GRINDER_NAME" className="bg-[var(--bg-surface)] border border-[var(--border-main)] p-2 text-xs font-mono outline-none focus:border-[var(--point-color)]" />
+                 <input 
+                   value={newGrinderName}
+                   onChange={(e) => setNewGrinderName(e.target.value)}
+                   placeholder="GRINDER_NAME" 
+                   className="bg-[var(--bg-surface)] border border-[var(--border-main)] p-2 text-xs font-mono outline-none focus:border-[var(--point-color)]" 
+                 />
                  <div className="grid grid-cols-3 gap-2 text-center">
-                   <div className="space-y-1"><span className="text-[9px] font-mono text-[var(--text-muted)]">MIN</span><input id="new-grinder-min" type="number" step="0.1" className="bg-[var(--bg-surface)] border border-[var(--border-main)] p-2 w-full text-xs font-mono outline-none" placeholder="0" /></div>
-                   <div className="space-y-1"><span className="text-[9px] font-mono text-[var(--text-muted)]">MAX</span><input id="new-grinder-max" type="number" step="0.1" className="bg-[var(--bg-surface)] border border-[var(--border-main)] p-2 w-full text-xs font-mono outline-none" placeholder="100" /></div>
-                   <div className="space-y-1"><span className="text-[9px] font-mono text-[var(--text-muted)]">STEP</span><input id="new-grinder-step" type="number" step="0.1" className="bg-[var(--bg-surface)] border border-[var(--border-main)] p-2 w-full text-xs font-mono outline-none" placeholder="0.5" /></div>
+                   <div className="space-y-1"><span className="text-[9px] font-mono text-[var(--text-muted)]">MIN</span><input value={newGrinderMin} onChange={(e) => setNewGrinderMin(e.target.value)} type="number" step="0.1" className="bg-[var(--bg-surface)] border border-[var(--border-main)] p-2 w-full text-xs font-mono outline-none" placeholder="0" /></div>
+                   <div className="space-y-1"><span className="text-[9px] font-mono text-[var(--text-muted)]">MAX</span><input value={newGrinderMax} onChange={(e) => setNewGrinderMax(e.target.value)} type="number" step="0.1" className="bg-[var(--bg-surface)] border border-[var(--border-main)] p-2 w-full text-xs font-mono outline-none" placeholder="100" /></div>
+                   <div className="space-y-1"><span className="text-[9px] font-mono text-[var(--text-muted)]">STEP</span><input value={newGrinderStep} onChange={(e) => setNewGrinderStep(e.target.value)} type="number" step="0.1" className="bg-[var(--bg-surface)] border border-[var(--border-main)] p-2 w-full text-xs font-mono outline-none" placeholder="0.5" /></div>
                  </div>
                  <MechanicalButton onClick={() => {
-                   const n = (document.getElementById('new-grinder-name') as HTMLInputElement);
-                   const mi = (document.getElementById('new-grinder-min') as HTMLInputElement);
-                   const ma = (document.getElementById('new-grinder-max') as HTMLInputElement);
-                   const st = (document.getElementById('new-grinder-step') as HTMLInputElement);
-                   if (n.value && mi.value && ma.value && st.value) {
-                     setSettings(s => ({ ...s, grinders: { ...s.grinders, [n.value]: { min: parseFloat(mi.value), max: parseFloat(ma.value), step: parseFloat(st.value) } } }));
-                     n.value = ''; mi.value = ''; ma.value = ''; st.value = ''; queueCloudSync();
+                   if (newGrinderName && newGrinderMin && newGrinderMax && newGrinderStep) {
+                     setSettings(s => ({ ...s, grinders: { ...s.grinders, [newGrinderName]: { min: parseFloat(newGrinderMin), max: parseFloat(newGrinderMax), step: parseFloat(newGrinderStep) } } }));
+                     setNewGrinderName(""); setNewGrinderMin(""); setNewGrinderMax(""); setNewGrinderStep("");
+                     queueCloudSync();
                    }
                  }} className="py-2 text-[10px] font-bold" style={{ backgroundColor: 'var(--point-color)' }}>ADD_GRINDER</MechanicalButton>
                </div>

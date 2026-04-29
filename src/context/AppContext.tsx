@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, useRef } from "react";
+import { type User } from "firebase/auth";
 import { 
   BeanInfo, 
   BrewRecord, 
@@ -19,7 +20,7 @@ import {
   EMPTY_INVENTORY_FORM, 
   EMPTY_RECIPE_FORM,
 } from "../constants";
-import { getContrastColor } from "../utils";
+import { useThemeApplier } from "../hooks/useThemeApplier";
 
 interface AppContextType {
   // Data States
@@ -35,8 +36,8 @@ interface AppContextType {
   setRecipes: React.Dispatch<React.SetStateAction<RecipeInfo[]>>;
   
   // App Growth/Meta States
-  user: any | null; // Firebase User
-  setUser: React.Dispatch<React.SetStateAction<any | null>>;
+  user: User | null; // Firebase User
+  setUser: React.Dispatch<React.SetStateAction<User | null>>;
   authReady: boolean;
   setAuthReady: React.Dispatch<React.SetStateAction<boolean>>;
   cloudReady: boolean;
@@ -125,7 +126,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [beans, setBeans] = useState<BeanInfo[]>([]);
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [recipes, setRecipes] = useState<RecipeInfo[]>([]);
-  const [user, setUser] = useState<any | null>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [authReady, setAuthReady] = useState(false);
   const [cloudReady, setCloudReady] = useState(false);
   const [cloudStatus, setCloudStatus] = useState("로컬 모드");
@@ -258,61 +259,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
   }, [persistedPayload]);
 
-  // Theme apply
-  useEffect(() => {
-    const root = document.documentElement;
-    root.style.setProperty("--point-color", settings.theme.pointColor);
-    root.style.setProperty("--point-foreground", getContrastColor(settings.theme.pointColor));
-    
-    if (settings.theme.isDarkMode) {
-      root.classList.add("dark");
-      root.style.backgroundColor = "#000000";
-      root.style.color = "#ffffff";
-      root.style.setProperty("--bg-deep", "#000000");
-      root.style.setProperty("--bg-base", "#09090b");
-      root.style.setProperty("--bg-surface", "#18181b");
-      root.style.setProperty("--border-main", "#27272a");
-      root.style.setProperty("--border-hover", "#3f3f46");
-      root.style.setProperty("--text-strong", "#ffffff");
-      root.style.setProperty("--text-main", "#d4d4d8");
-      root.style.setProperty("--text-dim", "#a1a1aa");
-      root.style.setProperty("--text-muted", "#71717a");
-      root.style.setProperty("--text-sub", "#52525b");
-    } else {
-      root.classList.remove("dark");
-      root.style.backgroundColor = "#fafafa";
-      root.style.color = "#09090b";
-      root.style.setProperty("--bg-deep", "#e4e4e7");
-      root.style.setProperty("--bg-base", "#fafafa");
-      root.style.setProperty("--bg-surface", "#ffffff");
-      root.style.setProperty("--border-main", "#d4d4d8");
-      root.style.setProperty("--border-hover", "#a1a1aa");
-      root.style.setProperty("--text-strong", "#09090b");
-      root.style.setProperty("--text-main", "#18181b");
-      root.style.setProperty("--text-dim", "#3f3f46");
-      root.style.setProperty("--text-muted", "#52525b");
-      root.style.setProperty("--text-sub", "#71717a");
-    }
-    
-    const baseScale = settings.theme.uiScale || 1.0;
-    root.style.fontSize = `${16 * baseScale}px`;
-    const textScale = settings.theme.textScale || 1.0;
-    
-    let styleTag = document.getElementById("dynamic-text-scaler");
-    if (!styleTag) {
-      styleTag = document.createElement("style");
-      styleTag.id = "dynamic-text-scaler";
-      document.head.appendChild(styleTag);
-    }
-    styleTag.innerHTML = `
-      .text-xs { font-size: calc(0.75rem * ${textScale}) !important; line-height: calc(1rem * ${textScale}) !important; }
-      .text-sm { font-size: calc(0.875rem * ${textScale}) !important; line-height: calc(1.25rem * ${textScale}) !important; }
-      .text-base { font-size: calc(1rem * ${textScale}) !important; line-height: calc(1.5rem * ${textScale}) !important; }
-      .text-lg { font-size: calc(1.125rem * ${textScale}) !important; line-height: calc(1.75rem * ${textScale}) !important; }
-      .text-xl { font-size: calc(1.25rem * ${textScale}) !important; line-height: calc(1.75rem * ${textScale}) !important; }
-      .text-[10px] { font-size: calc(10px * ${textScale}) !important; }
-    `;
-  }, [settings.theme]);
+  // Theme apply — CSS 변수 및 root 스타일 동기화
+  useThemeApplier(settings.theme);
 
   const value: AppContextType = {
     profiles, setProfiles,

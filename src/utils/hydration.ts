@@ -1,3 +1,4 @@
+import { type Dispatch } from "react";
 import { 
   BeanInfo, 
   BrewRecord, 
@@ -13,7 +14,8 @@ import {
   Grinder,
   BrewWater,
   Dripper,
-  RoastLevel
+  RoastLevel,
+  BrewAction
 } from "../types";
 import { 
   DEFAULT_SETTINGS, 
@@ -41,7 +43,7 @@ export const hydratePersistedData = (
     setInventory: (i: InventoryItem[]) => void;
     setRecipes: (r: RecipeInfo[]) => void;
     setRecords: (r: BrewRecord[]) => void;
-    dispatchBrewForm: (action: any) => void;
+    dispatchBrewForm: Dispatch<BrewAction>;
   }
 ) => {
   const loadedProfiles = (source.profiles as Record<string, GrinderProfile>) ?? {};
@@ -187,15 +189,15 @@ export const hydratePersistedData = (
  * Deeply removes all undefined fields from an object,
  * as Firestore does not allow them.
  */
-export const deepClean = (obj: any): any => {
-  if (Array.isArray(obj)) return obj.map(deepClean);
+export const deepClean = <T>(obj: T): T => {
+  if (Array.isArray(obj)) return obj.map(deepClean) as T;
   if (obj !== null && typeof obj === 'object' && !(obj instanceof Date)) {
-    const res: any = {};
-    Object.keys(obj).forEach(k => {
-      const v = obj[k];
+    const res: Record<string, unknown> = {};
+    Object.keys(obj as object).forEach(k => {
+      const v = (obj as Record<string, unknown>)[k];
       if (v !== undefined) res[k] = deepClean(v);
     });
-    return res;
+    return res as T;
   }
   return obj;
 };

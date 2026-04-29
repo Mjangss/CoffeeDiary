@@ -52,10 +52,32 @@ export const useFirebase = () => {
     }, 5000);
   };
 
+  /**
+   * 구버전 경로(users/{uid}/coffeeDiary/diary)에서 데이터를 읽어
+   * 신규 경로(coffeeDiaries/{uid})로 마이그레이션한다.
+   * 마이그레이션 성공 시 true, 데이터 없으면 false를 반환한다.
+   */
+  const tryMigrateFromLegacy = async (
+    uid: string,
+    currentRef: ReturnType<typeof getCloudDocRef>,
+    hydrationSetters: Parameters<typeof hydratePersistedData>[1],
+  ): Promise<boolean> => {
+    const legacyRef = getLegacyCloudDocRef(uid);
+    if (!legacyRef || !currentRef) return false;
+
+    const legacySnap = await getDoc(legacyRef);
+    if (!legacySnap.exists()) return false;
+
+    const legacyData = legacySnap.data() as Record<string, unknown>;
+    hydratePersistedData(legacyData, hydrationSetters);
+    await setDoc(currentRef, { ...legacyData, migratedFromLegacyAt: serverTimestamp(), updatedAt: serverTimestamp() }, { merge: true });
+    return true;
+  };
+
   const loadFromCloud = async (options?: { withVisual?: boolean }) => {
     if (!user || !db) return;
     const withVisual = options?.withVisual ?? false;
-    
+
     if (withVisual) {
       setCloudStatus("클라우드 불러오는 중...");
       setCloudStatusVisual("loading");
@@ -63,38 +85,22 @@ export const useFirebase = () => {
 
     try {
       const currentRef = getCloudDocRef(user.uid);
-      const legacyRef = getLegacyCloudDocRef(user.uid);
       if (!currentRef) return;
 
-      const currentSnap = await getDoc(currentRef);
       const hydrationSetters = { setProfiles, setBeans, setSettings, setInventory, setRecipes, setRecords, dispatchBrewForm };
+      const currentSnap = await getDoc(currentRef);
 
       if (currentSnap.exists()) {
         hydratePersistedData(currentSnap.data() as Record<string, unknown>, hydrationSetters);
         setCloudStatus("클라우드 불러오기 완료");
-        if (withVisual) {
-          setCloudStatusVisual("success");
-          scheduleCloudIdleStatus();
-        }
-        return;
+      } else {
+        const migrated = await tryMigrateFromLegacy(user.uid, currentRef, hydrationSetters);
+        setCloudStatus(migrated
+          ? "클라우드 불러오기 완료 (구버전 데이터 마이그레이션)"
+          : "클라우드 데이터 없음"
+        );
       }
 
-      if (legacyRef) {
-        const legacySnap = await getDoc(legacyRef);
-        if (legacySnap.exists()) {
-          const legacyData = legacySnap.data() as Record<string, unknown>;
-          hydratePersistedData(legacyData, hydrationSetters);
-          await setDoc(currentRef, { ...legacyData, migratedFromLegacyAt: serverTimestamp(), updatedAt: serverTimestamp() }, { merge: true });
-          setCloudStatus("클라우드 불러오기 완료 (구버전 데이터 마이그레이션)");
-          if (withVisual) {
-            setCloudStatusVisual("success");
-            scheduleCloudIdleStatus();
-          }
-          return;
-        }
-      }
-
-      setCloudStatus("클라우드 데이터 없음");
       if (withVisual) {
         setCloudStatusVisual("success");
         scheduleCloudIdleStatus();
@@ -129,6 +135,7 @@ export const useFirebase = () => {
       if (withVisual) setCloudStatusVisual("error");
     }
   };
+
 
   // Auth bootstrap
   useEffect(() => {
@@ -173,21 +180,16 @@ export const useFirebase = () => {
           hydratePersistedData(snap.data() as Record<string, unknown>, hydrationSetters);
           setCloudStatus("클라우드 데이터 로드됨");
         } else {
-          const legacyRef = getLegacyCloudDocRef(user.uid);
-          if (!legacyRef) return;
-          const legacySnap = await getDoc(legacyRef);
+          const migrated = await tryMigrateFromLegacy(user.uid, ref, hydrationSetters);
           if (!alive) return;
-          if (legacySnap.exists()) {
-            const legacyData = legacySnap.data() as Record<string, unknown>;
-            hydratePersistedData(legacyData, hydrationSetters);
-            await setDoc(ref, { ...legacyData, migratedFromLegacyAt: serverTimestamp(), updatedAt: serverTimestamp() });
-            if (!alive) return;
+
+          if (migrated) {
             setCloudStatus("클라우드 데이터 로드됨 (구버전 데이터 마이그레이션)");
           } else {
-            const hasData = (persistedPayload.records?.length > 0) || 
-                            (persistedPayload.beans?.length > 0) || 
-                            (persistedPayload.inventory?.length > 0);
-            
+            const hasData = (persistedPayload.records?.length ?? 0) > 0 ||
+                            (persistedPayload.beans?.length ?? 0) > 0 ||
+                            (persistedPayload.inventory?.length ?? 0) > 0;
+
             if (hasData) {
               await setDoc(ref, { ...persistedPayload, updatedAt: serverTimestamp() });
               if (!alive) return;
@@ -226,7 +228,7 @@ export const useFirebase = () => {
     try {
       console.log("🚀 Starting Google Login Popup...");
       await signInWithPopup(auth, googleProvider);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Auth Error:", error);
       setCloudStatus(describeAuthError(error));
     }

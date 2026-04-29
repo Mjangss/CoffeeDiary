@@ -42,6 +42,13 @@ const BrewingTimer: React.FC = () => {
     return missionSteps.find(s => currentTotalSec >= s.startSec && currentTotalSec < s.endSec);
   }, [missionSteps, currentTotalSec]);
 
+  const stageProgress = useMemo(() => {
+    if (!activeStep) return 0;
+    const duration = activeStep.endSec - activeStep.startSec;
+    if (duration <= 0) return 0;
+    return Math.min(100, ((currentTotalSec - activeStep.startSec) / duration) * 100);
+  }, [activeStep, currentTotalSec]);
+
   const nextStep = useMemo(() => {
     return missionSteps.find(s => s.startSec > currentTotalSec);
   }, [missionSteps, currentTotalSec]);
@@ -90,16 +97,22 @@ const BrewingTimer: React.FC = () => {
       if (requestRef.current) cancelAnimationFrame(requestRef.current);
       setIsRunning(false);
       startTimeRef.current = null;
+      triggerHaptic(HAPTIC_PATTERNS.ABORT_WARNING);
     } else {
-      if (isFinished) {
-        setElapsedMs(0);
-        setIsFinished(false);
-        setCurrentStepIdx(-1);
-      }
       triggerHaptic(HAPTIC_PATTERNS.MISSION_IGNITION);
       requestRef.current = requestAnimationFrame(animate);
       setIsRunning(true);
     }
+  };
+
+  const resetTimer = () => {
+    if (requestRef.current) cancelAnimationFrame(requestRef.current);
+    setIsRunning(false);
+    setIsFinished(false);
+    setElapsedMs(0);
+    setCurrentStepIdx(-1);
+    startTimeRef.current = null;
+    triggerHaptic(HAPTIC_PATTERNS.PRE_STAGE_ALERT);
   };
 
   const abortMission = () => {
@@ -155,13 +168,24 @@ const BrewingTimer: React.FC = () => {
             {formatTime(elapsedMs)}
           </div>
           
-          {/* Progress Bar */}
-          <div className="w-full max-w-md h-2 bg-zinc-900 border border-zinc-800 mt-4 overflow-hidden relative">
-            <motion.div 
-              className="h-full bg-[var(--point-color)]"
-              animate={{ width: `${Math.min(100, (currentTotalSec / totalDurationSec) * 100)}%` }}
-              transition={{ ease: "linear", duration: 0.1 }}
-            />
+          {/* Progress Bars */}
+          <div className="w-full max-w-md space-y-2 mt-4">
+            {/* Total Progress */}
+            <div className="h-2 bg-zinc-900 border border-zinc-800 overflow-hidden relative">
+              <motion.div 
+                className="h-full bg-white opacity-20"
+                animate={{ width: `${Math.min(100, (currentTotalSec / totalDurationSec) * 100)}%` }}
+                transition={{ ease: "linear", duration: 0.1 }}
+              />
+            </div>
+            {/* Stage Progress (Active Pour) */}
+            <div className="h-1 bg-zinc-900/50 overflow-hidden relative">
+              <motion.div 
+                className="h-full bg-[var(--point-color)]"
+                animate={{ width: `${stageProgress}%` }}
+                transition={{ ease: "linear", duration: 0.1 }}
+              />
+            </div>
           </div>
         </div>
 
@@ -244,26 +268,50 @@ const BrewingTimer: React.FC = () => {
             return (
               <div 
                 key={idx} 
-                className={`flex items-center justify-between p-3 border transition-all ${
+                className={`flex flex-col p-3 border transition-all relative overflow-hidden ${
                   isActive ? "border-[var(--point-color)] bg-[var(--point-color)]/5" : 
                   isPast ? "border-zinc-800 opacity-30" : "border-zinc-900 bg-zinc-950/30"
                 }`}
               >
-                <div className="flex items-center gap-4">
-                  <span className={`text-[10px] font-bold ${isActive ? 'text-[var(--point-color)]' : 'text-zinc-600'}`}>0{idx + 1}</span>
-                  <div className="flex flex-col">
-                    <span className="text-[10px] font-bold uppercase">{s.start} - {s.end}</span>
-                    <span className="text-[9px] text-zinc-500 uppercase tracking-widest">{s.waterMl}ML | {activeRecipeForTimer.useSwitch ? s.switchState : 'DRIP'}</span>
+                {/* Mini Progress Bar for Each Step */}
+                <div className="absolute bottom-0 left-0 h-[2px] bg-[var(--point-color)]/30 w-full">
+                  <motion.div 
+                    className="h-full bg-[var(--point-color)]"
+                    initial={{ width: 0 }}
+                    animate={{ 
+                      width: isActive ? `${stageProgress}%` : isPast ? "100%" : "0%" 
+                    }}
+                    transition={{ ease: "linear", duration: 0.1 }}
+                  />
+                </div>
+
+                <div className="flex items-center justify-between w-full z-10">
+                  <div className="flex items-center gap-3">
+                    <span className={`text-[9px] font-bold px-1.5 py-0.5 border ${isActive ? 'bg-[var(--point-color)] text-black border-[var(--point-color)]' : 'text-zinc-600 border-zinc-800'}`}>
+                      {idx + 1}
+                    </span>
+                    <div className="flex flex-col">
+                      <span className="text-[10px] font-bold uppercase tracking-tight">{s.start} - {s.end}</span>
+                      <span className="text-[8px] text-zinc-600 uppercase tracking-widest">
+                        {activeRecipeForTimer.useSwitch ? s.switchState : 'DRIP_INJECTION'}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-baseline gap-1 bg-zinc-900/50 px-3 py-1 border border-zinc-800/50">
+                    <span className={`text-lg font-black leading-none ${isActive ? 'text-[var(--point-color)]' : 'text-zinc-400'}`}>
+                      {s.waterMl}
+                    </span>
+                    <span className="text-[8px] font-bold text-zinc-600">ML</span>
                   </div>
                 </div>
+
                 {isActive && (
                   <motion.div 
-                    animate={{ x: [0, 5, 0] }}
-                    transition={{ repeat: Infinity, duration: 1 }}
-                    className="text-[var(--point-color)]"
-                  >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="9 18 15 12 9 6"></polyline></svg>
-                  </motion.div>
+                    animate={{ opacity: [0.3, 1, 0.3] }}
+                    transition={{ repeat: Infinity, duration: 1.5 }}
+                    className="absolute inset-0 bg-[var(--point-color)]/5 pointer-events-none"
+                  />
                 )}
                 {isPast && (
                   <span className="text-emerald-500">
@@ -277,17 +325,30 @@ const BrewingTimer: React.FC = () => {
       </div>
 
       {/* Footer Controls */}
-      <div className="p-8 bg-zinc-950 border-t border-zinc-900 grid grid-cols-1 gap-4 z-20">
+      <div className="p-8 bg-zinc-950 border-t border-zinc-900 grid grid-cols-[1fr_auto] gap-4 z-20">
         <MechanicalButton 
           onClick={toggleTimer}
-          className={`w-full py-5 text-sm font-black uppercase tracking-widest transition-all ${
-            isRunning ? "bg-zinc-800 text-white" : "text-black"
-          }`}
-          style={{ backgroundColor: !isRunning ? 'var(--point-color)' : undefined }}
+          className={`py-5 text-sm font-black uppercase tracking-widest transition-all ${
+            isRunning || isFinished ? "bg-zinc-800 text-zinc-100" : "text-black"
+          } ${isFinished ? "opacity-80 scale-95" : "scale-100"}`}
+          style={{ 
+            backgroundColor: (!isRunning && !isFinished) ? 'var(--point-color)' : undefined,
+            border: isFinished ? '1px inset rgba(255,255,255,0.1)' : undefined
+          }}
         >
-          {isRunning ? "[ PAUSE_SYSTEM ]" : isFinished ? "[ RESTART_MISSION ]" : "[ START_EXTRACTION ]"}
+          {isRunning ? "[ PAUSE_SYSTEM ]" : isFinished ? "[ MISSION_HALTED ]" : elapsedMs > 0 ? "[ RESUME_SESSION ]" : "[ START_EXTRACTION ]"}
         </MechanicalButton>
-        <p className="text-[9px] text-zinc-600 text-center uppercase tracking-widest animate-pulse">
+        
+        {!isRunning && (elapsedMs > 0 || isFinished) && (
+          <MechanicalButton 
+            onClick={resetTimer}
+            className="px-6 bg-rose-500/20 border border-rose-500/50 text-rose-500 text-xs font-bold uppercase"
+          >
+            RESET
+          </MechanicalButton>
+        )}
+        
+        <p className="col-span-2 text-[9px] text-zinc-600 text-center uppercase tracking-widest animate-pulse mt-2">
           Tactical_Feedback_Active | Screen_Lock_Engaged
         </p>
       </div>
