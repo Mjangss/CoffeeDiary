@@ -268,18 +268,34 @@ export const getTransitionVariants = (type: "scan" | "blur" | "glitch" = "scan",
 
   if (type === "blur") {
     return {
-      initial: { opacity: 0, filter: "blur(20px) saturate(0)", scale: 1.05 },
+      initial: { 
+        opacity: 0, 
+        filter: "blur(40px) saturate(0) brightness(1.5)", 
+        scale: 1.08,
+        y: 20
+      },
       animate: { 
         opacity: 1, 
-        filter: ["blur(20px) saturate(0)", "blur(8px) saturate(0.5)", "blur(0px) saturate(1)"], 
-        scale: [1.05, 1.02, 1],
+        filter: [
+          "blur(40px) saturate(0) brightness(1.5)", 
+          "blur(15px) saturate(0.5) brightness(1.2)", 
+          "blur(0px) saturate(1) brightness(1)"
+        ], 
+        scale: [1.08, 1.03, 1],
+        y: [20, 5, 0],
         transition: { 
           duration: d, 
           times: [0, 0.4, 1],
-          ease: "easeOut" 
+          ease: [0.22, 1, 0.36, 1] 
         } 
       },
-      exit: { opacity: 0, filter: "blur(10px) saturate(0.5)", transition: { duration: 0.3 } },
+      exit: { 
+        opacity: 0, 
+        filter: "blur(25px) saturate(0.2) brightness(0.7)", 
+        scale: 0.96,
+        y: -10,
+        transition: { duration: 0.4, ease: "easeIn" } 
+      },
     };
   }
   if (type === "glitch") {
