@@ -100,7 +100,7 @@ const BeanStorage: React.FC = () => {
   return (
     <motion.section 
       key="bean-storage"
-      variants={getTransitionVariants(settings.theme.pageTransition, estimatedHeight)}
+      variants={getTransitionVariants(settings.theme.pageTransition, estimatedHeight, settings.theme.uiScale)}
       initial="initial"
       animate="animate"
       exit="exit"

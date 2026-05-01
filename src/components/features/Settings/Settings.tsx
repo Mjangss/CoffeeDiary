@@ -58,7 +58,7 @@ const Settings: React.FC = () => {
   return (
     <motion.section 
       key={`settings-${settingsKey}`}
-      variants={getTransitionVariants(settings.theme.pageTransition, 1000)}
+      variants={getTransitionVariants(settings.theme.pageTransition, 1000, settings.theme.uiScale)}
       initial="initial"
       animate="animate"
       exit="exit"

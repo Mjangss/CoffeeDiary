@@ -261,7 +261,7 @@ export const describeCloudError = (error: unknown) => {
   return `클라우드 동기화 실패 (${code})`;
 };
 
-export const getTransitionVariants = (type: "scan" | "glitch" | "vanguard" | "shutter" | "cascade" | "decrypt" = "scan", height?: number): Variants => {
+export const getTransitionVariants = (type: "scan" | "glitch" | "vanguard" | "shutter" | "cascade" | "decrypt" = "scan", height?: number, uiScale: number = 1): Variants => {
   const velocity = 2500; // px per second
   const baseDuration = height ? height / velocity : 0.6;
   const d = Math.min(Math.max(baseDuration, 0.6), 1.5);
@@ -271,7 +271,7 @@ export const getTransitionVariants = (type: "scan" | "glitch" | "vanguard" | "sh
       initial: { 
         opacity: 0, 
         filter: "grayscale(1) contrast(5) blur(15px) brightness(0.3)", 
-        scale: 0.97,
+        scale: 0.97 * uiScale,
         skewX: 3
       },
       animate: { 
@@ -282,7 +282,7 @@ export const getTransitionVariants = (type: "scan" | "glitch" | "vanguard" | "sh
           "grayscale(0.3) contrast(1.5) blur(2px) brightness(1.1)", 
           "grayscale(0) contrast(1) blur(0px) brightness(1)"
         ], 
-        scale: [0.97, 1.02, 1],
+        scale: [0.97 * uiScale, 1.02 * uiScale, uiScale],
         skewX: [3, -1, 0],
         transition: { 
           duration: d * 1.2, 
@@ -293,7 +293,7 @@ export const getTransitionVariants = (type: "scan" | "glitch" | "vanguard" | "sh
       exit: { 
         opacity: 0, 
         filter: "grayscale(1) contrast(2) blur(8px)", 
-        scale: 1.05,
+        scale: 1.05 * uiScale,
         transition: { duration: 0.4, ease: "easeIn" } 
       },
     };
@@ -331,13 +331,13 @@ export const getTransitionVariants = (type: "scan" | "glitch" | "vanguard" | "sh
       initial: { 
         clipPath: "circle(0% at 50% 50%)",
         filter: "brightness(3) contrast(2)",
-        scale: 1.2,
+        scale: 1.2 * uiScale,
         opacity: 0
       },
       animate: { 
         clipPath: "circle(150% at 50% 50%)",
         filter: "brightness(1) contrast(1)",
-        scale: 1,
+        scale: uiScale,
         opacity: 1,
         transition: { 
           duration: d * 1.2, 
