@@ -378,7 +378,7 @@ export const getTransitionVariants = (type: "scan" | "blur" | "glitch" | "vangua
     return {
       initial: { 
         opacity: 0, 
-        y: -height || -100,
+        y: height ? -height : -100,
         skewY: 5,
         filter: "blur(10px) brightness(2)"
       },
@@ -393,7 +393,7 @@ export const getTransitionVariants = (type: "scan" | "blur" | "glitch" | "vangua
         } 
       },
       exit: { 
-        y: height || 100,
+        y: height ? height : 100,
         opacity: 0,
         transition: { duration: 0.4, ease: "easeIn" } 
       },
