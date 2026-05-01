@@ -247,7 +247,7 @@ const BrewingForm: React.FC = () => {
   return (
     <motion.section 
       key="coffee-diary"
-      variants={getTransitionVariants(settings.theme.pageTransition, 1200, settings.theme.uiScale)}
+      variants={getTransitionVariants(settings.theme.pageTransition, 1200)}
       initial="initial"
       animate="animate"
       exit="exit"

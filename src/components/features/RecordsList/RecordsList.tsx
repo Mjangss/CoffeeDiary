@@ -54,7 +54,7 @@ const RecordsList: React.FC = () => {
   return (
     <motion.section 
       key="coffee-diary-records"
-      variants={getTransitionVariants(settings.theme.pageTransition, estimatedHeight, settings.theme.uiScale)}
+      variants={getTransitionVariants(settings.theme.pageTransition, estimatedHeight)}
       initial="initial"
       animate="animate"
       exit="exit"

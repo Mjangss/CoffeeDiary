@@ -118,7 +118,7 @@ const Inventory: React.FC = () => {
   return (
     <motion.section 
       key="inventory"
-      variants={getTransitionVariants(settings.theme.pageTransition, estimatedHeight, settings.theme.uiScale)}
+      variants={getTransitionVariants(settings.theme.pageTransition, estimatedHeight)}
       initial="initial"
       animate="animate"
       exit="exit"
