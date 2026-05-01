@@ -261,39 +261,39 @@ export const describeCloudError = (error: unknown) => {
   return `클라우드 동기화 실패 (${code})`;
 };
 
-export const getTransitionVariants = (type: "scan" | "blur" | "glitch" | "vanguard" | "shutter" | "cascade" = "scan", height?: number): Variants => {
+export const getTransitionVariants = (type: "scan" | "glitch" | "vanguard" | "shutter" | "cascade" | "decrypt" = "scan", height?: number): Variants => {
   const velocity = 2500; // px per second
   const baseDuration = height ? height / velocity : 0.6;
   const d = Math.min(Math.max(baseDuration, 0.6), 1.5);
 
-  if (type === "blur") {
+  if (type === "decrypt") {
     return {
       initial: { 
         opacity: 0, 
-        filter: "blur(40px) saturate(0) brightness(1.5)", 
-        scale: 1.08,
-        y: 20
+        filter: "grayscale(1) contrast(5) blur(15px) brightness(0.3)", 
+        scale: 0.97,
+        skewX: 3
       },
       animate: { 
         opacity: 1, 
         filter: [
-          "blur(40px) saturate(0) brightness(1.5)", 
-          "blur(15px) saturate(0.5) brightness(1.2)", 
-          "blur(0px) saturate(1) brightness(1)"
+          "grayscale(1) contrast(5) blur(15px) brightness(0.3)", 
+          "grayscale(0.8) contrast(3) blur(8px) brightness(1.5)", 
+          "grayscale(0.3) contrast(1.5) blur(2px) brightness(1.1)", 
+          "grayscale(0) contrast(1) blur(0px) brightness(1)"
         ], 
-        scale: [1.08, 1.03, 1],
-        y: [20, 5, 0],
+        scale: [0.97, 1.02, 1],
+        skewX: [3, -1, 0],
         transition: { 
-          duration: d, 
-          times: [0, 0.4, 1],
-          ease: [0.22, 1, 0.36, 1] 
+          duration: d * 1.2, 
+          times: [0, 0.2, 0.5, 1],
+          ease: [0.16, 1, 0.3, 1] 
         } 
       },
       exit: { 
         opacity: 0, 
-        filter: "blur(25px) saturate(0.2) brightness(0.7)", 
-        scale: 0.96,
-        y: -10,
+        filter: "grayscale(1) contrast(2) blur(8px)", 
+        scale: 1.05,
         transition: { duration: 0.4, ease: "easeIn" } 
       },
     };
