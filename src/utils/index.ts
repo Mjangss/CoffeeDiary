@@ -1,17 +1,17 @@
 import { toPng } from "html-to-image";
 import { Variants } from "framer-motion";
-import { 
-  BrewMethod, 
-  Grinder, 
-  Dripper, 
-  RecipePour, 
-  RecipeInfo, 
-  BeanInfo 
+import {
+  BrewMethod,
+  Grinder,
+  Dripper,
+  RecipePour,
+  RecipeInfo,
+  BeanInfo
 } from "../types";
-import { 
-  DEFAULT_CUP_SCORES, 
-  MAX_CUP_SCORE, 
-  CUP_SCORE_STEP 
+import {
+  DEFAULT_CUP_SCORES,
+  MAX_CUP_SCORE,
+  CUP_SCORE_STEP
 } from "../constants";
 
 export const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
@@ -131,7 +131,7 @@ export const buildRecipeSummary = (recipeInfo: RecipeInfo) => {
     .join(", ");
   const dilutionLabel = recipeInfo.dilutionGuide ? ` / 가수 ${recipeInfo.dilutionGuide}` : "";
   const filterLabel = recipeInfo.method === "OXO" ? ` / 필터 [상:${recipeInfo.oxoUpperFilter} / 하:${recipeInfo.oxoLowerFilter}]` : "";
-  
+
   return `${recipeInfo.name} / ${recipeInfo.method.toUpperCase()} / ${recipeInfo.drinkType.toUpperCase()} / ${recipeInfo.dose}g / 총투입 ${round(totalPourWater, 1)}ml / 비율 ${ratioText}${dilutionLabel}${filterLabel} / ${timeline}`;
 };
 
@@ -154,10 +154,10 @@ export const parseTimeToSeconds = (timeStr: string) => {
 export const calcRestDays = (roastDate: string, frozenDurationMs: number = 0, lastFrozenAt?: string, isFrozen: boolean = false) => {
   const roastTime = new Date(roastDate).getTime();
   if (Number.isNaN(roastTime)) return 0;
-  
+
   const effectiveNow = (isFrozen && lastFrozenAt) ? new Date(lastFrozenAt).getTime() : Date.now();
   const netDuration = effectiveNow - roastTime - frozenDurationMs;
-  
+
   return clamp(Math.floor(Math.max(0, netDuration) / (1000 * 60 * 60 * 24)), 0, 365);
 };
 
@@ -268,34 +268,34 @@ export const getTransitionVariants = (type: "scan" | "glitch" | "vanguard" | "sh
 
   if (type === "void") {
     return {
-      initial: { 
-        opacity: 0, 
+      initial: {
+        opacity: 0,
         filter: "brightness(0) contrast(2) saturate(0)"
       },
-      animate: { 
-        opacity: 1, 
+      animate: {
+        opacity: 1,
         filter: [
-          "brightness(0) contrast(2) saturate(0)", 
-          "brightness(1.4) contrast(1.2) saturate(0.5)", 
+          "brightness(0) contrast(2) saturate(0)",
+          "brightness(1.4) contrast(1.2) saturate(0.5)",
           "brightness(1) contrast(1) saturate(1)"
-        ], 
-        transition: { 
-          duration: d * 1.5, 
+        ],
+        transition: {
+          duration: d * 1.5,
           times: [0, 0.4, 1],
-          ease: [0.22, 1, 0.36, 1] 
-        } 
+          ease: [0.22, 1, 0.36, 1]
+        }
       },
-      exit: { 
-        opacity: 0, 
-        filter: "brightness(0) contrast(1.5)", 
-        transition: { duration: 0.4, ease: "easeIn" } 
+      exit: {
+        opacity: 0,
+        filter: "brightness(1) contrast(1.5)",
+        transition: { duration: 0.4, ease: "easeIn" }
       },
     };
   }
   if (type === "glitch") {
     return {
       initial: { opacity: 0, x: -15, skewX: 10, textShadow: "0px 0 transparent" },
-      animate: { 
+      animate: {
         opacity: [0, 1, 0.4, 0.9, 1],
         x: [10, -5, 2, -1, 0],
         skewX: [15, -10, 5, 0],
@@ -305,118 +305,118 @@ export const getTransitionVariants = (type: "scan" | "glitch" | "vanguard" | "sh
           "0px 0px transparent"
         ],
         filter: ["brightness(1.8)", "brightness(1.3)", "brightness(1)"],
-        transition: { 
-          duration: d, 
+        transition: {
+          duration: d,
           times: [0, 0.1, 0.2, 0.4, 1],
           ease: "easeInOut"
-        } 
+        }
       },
-      exit: { 
+      exit: {
         opacity: [1, 0.6, 0],
         x: [0, 5, 15],
         skewX: [0, 5, -10],
         textShadow: "1px 0 rgba(255,0,0,0.5), -1px 0 rgba(0,255,255,0.5)",
-        transition: { duration: 0.2 } 
+        transition: { duration: 0.2 }
       },
     };
   }
   if (type === "vanguard") {
     return {
-      initial: { 
+      initial: {
         clipPath: "circle(0% at 50% 50%)",
         filter: "brightness(3) contrast(2)",
         scale: 1.2,
         opacity: 0
       },
-      animate: { 
+      animate: {
         clipPath: "circle(150% at 50% 50%)",
         filter: "brightness(1) contrast(1)",
         scale: 1,
         opacity: 1,
-        transition: { 
-          duration: d * 1.2, 
-          ease: [0.16, 1, 0.3, 1] 
-        } 
+        transition: {
+          duration: d * 1.2,
+          ease: [0.16, 1, 0.3, 1]
+        }
       },
-      exit: { 
+      exit: {
         clipPath: "circle(0% at 50% 50%)",
         opacity: 0,
-        transition: { duration: 0.4, ease: "easeIn" } 
+        transition: { duration: 0.4, ease: "easeIn" }
       },
     };
   }
   if (type === "shutter") {
     return {
-      initial: { 
+      initial: {
         clipPath: "inset(0 50% 0 50%)",
         opacity: 0,
         x: -10
       },
-      animate: { 
+      animate: {
         clipPath: "inset(0 0% 0 0%)",
         opacity: 1,
         x: 0,
-        transition: { 
-          duration: d, 
-          ease: [0.22, 1, 0.36, 1] 
-        } 
+        transition: {
+          duration: d,
+          ease: [0.22, 1, 0.36, 1]
+        }
       },
-      exit: { 
+      exit: {
         clipPath: "inset(0 50% 0 50%)",
         opacity: 0,
-        transition: { duration: 0.3 } 
+        transition: { duration: 0.3 }
       },
     };
   }
   if (type === "cascade") {
     return {
-      initial: { 
-        opacity: 0, 
+      initial: {
+        opacity: 0,
         y: height ? -height : -100,
         skewY: 5,
         filter: "blur(10px) brightness(2)"
       },
-      animate: { 
-        opacity: 1, 
+      animate: {
+        opacity: 1,
         y: 0,
         skewY: 0,
         filter: "blur(0px) brightness(1)",
-        transition: { 
-          duration: d * 1.1, 
-          ease: [0.33, 1, 0.68, 1] 
-        } 
+        transition: {
+          duration: d * 1.1,
+          ease: [0.33, 1, 0.68, 1]
+        }
       },
-      exit: { 
+      exit: {
         y: height ? height : 100,
         opacity: 0,
-        transition: { duration: 0.4, ease: "easeIn" } 
+        transition: { duration: 0.4, ease: "easeIn" }
       },
     };
   }
   return {
-    initial: { 
-      opacity: 0, 
+    initial: {
+      opacity: 0,
       clipPath: "inset(0 0 100% 0)",
       backgroundImage: "linear-gradient(to bottom, transparent, var(--point-color) 50%, transparent)",
       backgroundSize: "100% 4px",
       backgroundRepeat: "no-repeat",
       backgroundPosition: "0% 0%"
     },
-    animate: { 
-      opacity: 1, 
+    animate: {
+      opacity: 1,
       clipPath: "inset(0 0 0% 0)",
       backgroundPosition: "0% 100%",
-      transition: { 
-        duration: d, 
+      transition: {
+        duration: d,
         ease: [0.22, 1, 0.36, 1],
         clipPath: { duration: d },
         backgroundPosition: { duration: d }
-      } 
+      }
     },
-    exit: { 
-      opacity: 0, 
-      clipPath: "inset(100% 0 0 0)", 
-      transition: { duration: 0.3 } 
+    exit: {
+      opacity: 0,
+      clipPath: "inset(100% 0 0 0)",
+      transition: { duration: 0.3 }
     },
   };
 };
@@ -430,28 +430,28 @@ export const BACKDROP_VARIANTS: Variants = {
 
 export const MODAL_VARIANTS: Variants = {
   initial: { opacity: 0, y: 20, scale: 0.95, skewX: 2 },
-  animate: { 
-    opacity: 1, 
-    y: 0, 
+  animate: {
+    opacity: 1,
+    y: 0,
     scale: 1,
     skewX: [2, -1, 0],
     textShadow: [
       "1px 0 rgba(255,0,0,0.5), -1px 0 rgba(0,255,255,0.5)",
       "0px 0 transparent"
     ],
-    transition: { 
+    transition: {
       type: "spring",
       stiffness: 400,
       damping: 30,
       skewX: { duration: 0.2, times: [0, 0.5, 1] },
       textShadow: { duration: 0.15, delay: 0.05 }
-    } 
+    }
   },
-  exit: { 
-    opacity: 0, 
-    y: 10, 
+  exit: {
+    opacity: 0,
+    y: 10,
     scale: 0.98,
-    transition: { duration: 0.15 } 
+    transition: { duration: 0.15 }
   },
 };
 
@@ -460,10 +460,10 @@ export const handleDownloadScreenshot = async (ref: React.RefObject<HTMLDivEleme
     alert("⚠️ Capture target not found.");
     return;
   }
-  
+
   try {
     const bgColor = getComputedStyle(document.documentElement).getPropertyValue("--bg-base").trim() || "#09090b";
-    
+
     // Calculate actual dimensions to prevent cutting
     const width = ref.current.offsetWidth;
     const height = ref.current.scrollHeight;
@@ -482,14 +482,14 @@ export const handleDownloadScreenshot = async (ref: React.RefObject<HTMLDivEleme
         width: `${width}px`,
       }
     });
-    
+
     const link = document.createElement("a");
     link.download = `${filename}_${new Date().toISOString().split("T")[0]}.png`;
     link.href = dataUrl;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    
+
     alert("✅ 스크린샷이 다운로드 폴더에 저장되었습니다.");
   } catch (err) {
     console.error("Screenshot capture failed:", err);
