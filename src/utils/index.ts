@@ -261,43 +261,11 @@ export const describeCloudError = (error: unknown) => {
   return `클라우드 동기화 실패 (${code})`;
 };
 
-export const getTransitionVariants = (type: "scan" | "glitch" | "vanguard" | "shutter" | "cascade" | "decrypt" = "scan", height?: number): Variants => {
+export const getTransitionVariants = (type: "scan" | "glitch" | "vanguard" | "shutter" | "cascade" = "scan", height?: number): Variants => {
   const velocity = 2500; // px per second
   const baseDuration = height ? height / velocity : 0.6;
   const d = Math.min(Math.max(baseDuration, 0.6), 1.5);
 
-  if (type === "decrypt") {
-    return {
-      initial: { 
-        opacity: 0, 
-        filter: "grayscale(1) contrast(5) blur(15px) brightness(0.3)", 
-        scale: 0.97,
-        skewX: 3
-      },
-      animate: { 
-        opacity: 1, 
-        filter: [
-          "grayscale(1) contrast(5) blur(15px) brightness(0.3)", 
-          "grayscale(0.8) contrast(3) blur(8px) brightness(1.5)", 
-          "grayscale(0.3) contrast(1.5) blur(2px) brightness(1.1)", 
-          "grayscale(0) contrast(1) blur(0px) brightness(1)"
-        ], 
-        scale: [0.97, 1.02, 1],
-        skewX: [3, -1, 0],
-        transition: { 
-          duration: d * 1.2, 
-          times: [0, 0.2, 0.5, 1],
-          ease: [0.16, 1, 0.3, 1] 
-        } 
-      },
-      exit: { 
-        opacity: 0, 
-        filter: "grayscale(1) contrast(2) blur(8px)", 
-        scale: 1.05,
-        transition: { duration: 0.4, ease: "easeIn" } 
-      },
-    };
-  }
   if (type === "glitch") {
     return {
       initial: { opacity: 0, x: -15, skewX: 10, textShadow: "0px 0 transparent" },

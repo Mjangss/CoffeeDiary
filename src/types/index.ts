@@ -124,7 +124,7 @@ export type AppSettings = {
   filters: string[];
   units: { temp: "C" | "F"; weight: "g" | "oz" };
   roastLabels: Record<RoastLevel, string>;
-  theme: { isDarkMode: boolean; pointColor: string; uiScale: number; textScale: number; pageTransition: "scan" | "glitch" | "vanguard" | "shutter" | "cascade" | "decrypt" };
+  theme: { isDarkMode: boolean; pointColor: string; uiScale: number; textScale: number; pageTransition: "scan" | "glitch" | "vanguard" | "shutter" | "cascade" };
 };
 
 export type PersistedPayload = {
