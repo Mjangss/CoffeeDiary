@@ -270,8 +270,7 @@ export const getTransitionVariants = (type: "scan" | "glitch" | "vanguard" | "sh
     return {
       initial: { 
         opacity: 0, 
-        filter: "brightness(0) contrast(2) saturate(0)", 
-        scale: 0.95 
+        filter: "brightness(0) contrast(2) saturate(0)"
       },
       animate: { 
         opacity: 1, 
@@ -280,7 +279,6 @@ export const getTransitionVariants = (type: "scan" | "glitch" | "vanguard" | "sh
           "brightness(1.4) contrast(1.2) saturate(0.5)", 
           "brightness(1) contrast(1) saturate(1)"
         ], 
-        scale: [0.95, 1.01, 1],
         transition: { 
           duration: d * 1.5, 
           times: [0, 0.4, 1],
@@ -290,7 +288,6 @@ export const getTransitionVariants = (type: "scan" | "glitch" | "vanguard" | "sh
       exit: { 
         opacity: 0, 
         filter: "brightness(0) contrast(1.5)", 
-        scale: 1.05,
         transition: { duration: 0.4, ease: "easeIn" } 
       },
     };
