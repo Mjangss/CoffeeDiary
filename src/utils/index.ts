@@ -261,7 +261,7 @@ export const describeCloudError = (error: unknown) => {
   return `클라우드 동기화 실패 (${code})`;
 };
 
-export const getTransitionVariants = (type: "scan" | "blur" | "glitch" = "scan", height?: number): Variants => {
+export const getTransitionVariants = (type: "scan" | "blur" | "glitch" | "vanguard" | "shutter" | "cascade" = "scan", height?: number): Variants => {
   const velocity = 2500; // px per second
   const baseDuration = height ? height / velocity : 0.6;
   const d = Math.min(Math.max(baseDuration, 0.6), 1.5);
@@ -323,6 +323,79 @@ export const getTransitionVariants = (type: "scan" | "blur" | "glitch" = "scan",
         skewX: [0, 5, -10],
         textShadow: "1px 0 rgba(255,0,0,0.5), -1px 0 rgba(0,255,255,0.5)",
         transition: { duration: 0.2 } 
+      },
+    };
+  }
+  if (type === "vanguard") {
+    return {
+      initial: { 
+        clipPath: "circle(0% at 50% 50%)",
+        filter: "brightness(3) contrast(2)",
+        scale: 1.2,
+        opacity: 0
+      },
+      animate: { 
+        clipPath: "circle(150% at 50% 50%)",
+        filter: "brightness(1) contrast(1)",
+        scale: 1,
+        opacity: 1,
+        transition: { 
+          duration: d * 1.2, 
+          ease: [0.16, 1, 0.3, 1] 
+        } 
+      },
+      exit: { 
+        clipPath: "circle(0% at 50% 50%)",
+        opacity: 0,
+        transition: { duration: 0.4, ease: "easeIn" } 
+      },
+    };
+  }
+  if (type === "shutter") {
+    return {
+      initial: { 
+        clipPath: "inset(0 50% 0 50%)",
+        opacity: 0,
+        x: -10
+      },
+      animate: { 
+        clipPath: "inset(0 0% 0 0%)",
+        opacity: 1,
+        x: 0,
+        transition: { 
+          duration: d, 
+          ease: [0.22, 1, 0.36, 1] 
+        } 
+      },
+      exit: { 
+        clipPath: "inset(0 50% 0 50%)",
+        opacity: 0,
+        transition: { duration: 0.3 } 
+      },
+    };
+  }
+  if (type === "cascade") {
+    return {
+      initial: { 
+        opacity: 0, 
+        y: -height || -100,
+        skewY: 5,
+        filter: "blur(10px) brightness(2)"
+      },
+      animate: { 
+        opacity: 1, 
+        y: 0,
+        skewY: 0,
+        filter: "blur(0px) brightness(1)",
+        transition: { 
+          duration: d * 1.1, 
+          ease: [0.33, 1, 0.68, 1] 
+        } 
+      },
+      exit: { 
+        y: height || 100,
+        opacity: 0,
+        transition: { duration: 0.4, ease: "easeIn" } 
       },
     };
   }

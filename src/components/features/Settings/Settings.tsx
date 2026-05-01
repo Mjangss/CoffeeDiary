@@ -116,7 +116,7 @@ const Settings: React.FC = () => {
                 <div className="space-y-3 pt-4 border-t border-[var(--border-main)]">
                   <p className="text-[10px] text-[var(--text-muted)] font-mono uppercase tracking-widest">TRANSITION_FX</p>
                   <div className="grid grid-cols-3 gap-2">
-                    {["scan", "blur", "glitch"].map(fx => (
+                    {["scan", "blur", "glitch", "vanguard", "shutter", "cascade"].map(fx => (
                       <button key={fx} onClick={() => { setSettings(s => ({ ...s, theme: { ...s.theme, pageTransition: fx as any } })); setSettingsKey(k => k + 1); }} className={`py-2 text-[10px] font-mono font-bold uppercase border transition-all ${settings.theme.pageTransition === fx ? 'border-[var(--point-color)] text-[var(--point-color)] bg-[var(--point-color)]/10' : 'border-[var(--border-main)] text-[var(--text-muted)] hover:text-[var(--text-main)]'}`}>{fx.toUpperCase()}</button>
                     ))}
                   </div>
