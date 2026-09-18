@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAppContext } from "../../../context/AppContext";
 import { useBrewContext } from "../../../context/BrewContext";
@@ -8,11 +8,14 @@ import { getTransitionVariants } from "../../../utils";
 import SwipeableRow from "../../common/SwipeableRow";
 import TacticalSortMenu from "../../common/TacticalSortMenu";
 import RecordPreview from "./RecordPreview";
+import { cancelBrewRecord, deleteBrewDiary } from "../../../lib/recordLedger";
+import LoadMoreButton from "../../common/LoadMoreButton";
 
 const RecordsList: React.FC = () => {
   const {
     records,
-    setRecords,
+    replacePersistedPayload,
+    persistedPayload,
     search,
     setSearch,
     methodFilter,
@@ -26,6 +29,7 @@ const RecordsList: React.FC = () => {
   } = useAppContext();
 
   const { dispatch } = useBrewContext();
+  const [visibleCount, setVisibleCount] = useState(30);
 
   const filteredRecords = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -39,7 +43,7 @@ const RecordsList: React.FC = () => {
   }, [records, search, methodFilter]);
 
   const removeRecord = (recordId: string) => {
-    setRecords((prev) => prev.filter((item) => item.id !== recordId));
+    replacePersistedPayload(deleteBrewDiary(persistedPayload, recordId));
   };
 
   const loadRecordToDiary = (target: BrewRecord) => {
@@ -90,6 +94,7 @@ const RecordsList: React.FC = () => {
           </div>
         </div>
 
+        <p className="mb-3 text-xs text-[var(--text-muted)]">기록 삭제는 일기와 분쇄도 통계만 제거합니다. 사용한 재고는 복원하지 않습니다.</p>
         <div className="grid gap-3">
           <AnimatePresence mode="popLayout">
             {filteredRecords.length === 0 ? (
@@ -100,7 +105,7 @@ const RecordsList: React.FC = () => {
                 <p className="font-mono text-[var(--text-muted)] uppercase text-xs">No_Records_Found_In_Database</p>
               </motion.div>
             ) : (
-              filteredRecords.map((record) => (
+              filteredRecords.slice(0, visibleCount).map((record) => (
                 <SwipeableRow 
                   key={record.id} 
                   onDelete={() => removeRecord(record.id)}
@@ -145,6 +150,7 @@ const RecordsList: React.FC = () => {
               ))
             )}
           </AnimatePresence>
+          <LoadMoreButton shown={Math.min(visibleCount, filteredRecords.length)} total={filteredRecords.length} onClick={() => setVisibleCount(count => count + 30)} />
         </div>
       </motion.div>
 
@@ -156,6 +162,10 @@ const RecordsList: React.FC = () => {
             onEdit={(rec) => {
               setRecordPreview(null);
               loadRecordToDiary(rec);
+            }}
+            onCancel={() => {
+              replacePersistedPayload(cancelBrewRecord(persistedPayload, recordPreview.id));
+              setRecordPreview(null);
             }}
           />
         )}

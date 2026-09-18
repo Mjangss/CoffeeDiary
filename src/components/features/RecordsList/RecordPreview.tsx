@@ -1,6 +1,6 @@
-import React, { useRef } from "react";
+import React, { useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { useAppContext } from "../../../context/AppContext";
+import { useDiaryData } from "../../../context/AppContext";
 import { BrewRecord } from "../../../types";
 import { SCORE_FIELDS } from "../../../constants";
 import { 
@@ -10,16 +10,20 @@ import {
 } from "../../../utils";
 import { Portal } from "../../common/Portal";
 import MechanicalButton from "../../common/MechanicalButton";
+import { useDialogAccessibility } from "../../../hooks/useDialogAccessibility";
 
 interface RecordPreviewProps {
   record: BrewRecord;
   onClose: () => void;
   onEdit: (record: BrewRecord) => void;
+  onCancel: () => void;
 }
 
-const RecordPreview: React.FC<RecordPreviewProps> = ({ record, onClose, onEdit }) => {
-  const { settings } = useAppContext();
+const RecordPreview: React.FC<RecordPreviewProps> = ({ record, onClose, onEdit, onCancel }) => {
+  const { settings } = useDiaryData();
   const recordPopupRef = useRef<HTMLDivElement>(null);
+  const [cancelError, setCancelError] = useState("");
+  useDialogAccessibility(recordPopupRef, true, onClose);
 
   return (
     <Portal>
@@ -33,13 +37,17 @@ const RecordPreview: React.FC<RecordPreviewProps> = ({ record, onClose, onEdit }
       >
         <motion.div
           ref={recordPopupRef}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="record-preview-title"
+          tabIndex={-1}
           variants={MODAL_VARIANTS}
           className="w-full max-w-2xl border border-[var(--border-main)] bg-[var(--bg-base)] p-6 shadow-2xl my-auto"
           onClick={(e) => e.stopPropagation()}
         >
         <div className="mb-4 flex items-center justify-between border-b border-[var(--border-main)] pb-3">
           <div>
-            <h3 className="text-xl font-bold tracking-tight">BREW_LOG_DETAILS</h3>
+            <h3 id="record-preview-title" className="text-xl font-bold tracking-tight">추출 기록 상세</h3>
             <p className="text-[10px] text-[var(--text-muted)] font-mono mt-1">{record.id}</p>
           </div>
           <div className="flex items-center gap-2">
@@ -47,6 +55,7 @@ const RecordPreview: React.FC<RecordPreviewProps> = ({ record, onClose, onEdit }
               onClick={() => handleDownloadScreenshot(recordPopupRef, "BREW_LOG")}
               className="group relative cursor-pointer border border-[var(--border-main)] hover:border-[var(--point-color)] bg-[var(--bg-surface)]/30 p-2 text-[var(--text-muted)] transition-all hover:bg-[var(--point-color)]/5"
               title="DOWNLOAD_SCREENSHOT"
+              aria-label="추출 기록 이미지로 저장"
             >
               <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
                 <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
@@ -58,7 +67,7 @@ const RecordPreview: React.FC<RecordPreviewProps> = ({ record, onClose, onEdit }
               onClick={onClose} 
               className="cursor-pointer border border-[var(--border-hover)] hover:border-[var(--point-color)] px-3 py-1 text-xs text-[var(--text-main)] transition-colors uppercase font-mono"
             >
-              CLOSE.X
+              닫기
             </button>
           </div>
         </div>
@@ -152,6 +161,19 @@ const RecordPreview: React.FC<RecordPreviewProps> = ({ record, onClose, onEdit }
           >
             [ EDIT_PROTOCOL ] 기록 수정하기
           </MechanicalButton>
+          <button
+            type="button"
+            onClick={() => {
+              if (!window.confirm(record.inventoryId
+                ? "추출을 취소할까요? 연결된 재고를 복원하고 기록을 삭제합니다."
+                : "추출을 취소할까요? 연결된 재고가 없어 기록만 삭제합니다.")) return;
+              try { onCancel(); } catch (error) {
+                setCancelError(error instanceof Error ? error.message : "추출을 취소하지 못했습니다.");
+              }
+            }}
+            className="mt-3 w-full border border-rose-500/60 px-3 py-2 text-xs text-rose-400 hover:bg-rose-500/10"
+          >{record.inventoryId ? "추출 취소 · 재고 복원" : "추출 취소 · 기록 삭제"}</button>
+          {cancelError && <p role="alert" className="mt-2 text-xs text-rose-500">{cancelError}</p>}
         </div>
         </motion.div>
       </motion.div>

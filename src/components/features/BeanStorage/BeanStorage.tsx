@@ -1,4 +1,4 @@
-import React, { useMemo, useRef } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAppContext } from "../../../context/AppContext";
 import { useBrewContext } from "../../../context/BrewContext";
@@ -13,6 +13,7 @@ import {
   BACKDROP_VARIANTS,
   MODAL_VARIANTS
 } from "../../../utils";
+import LoadMoreButton from "../../common/LoadMoreButton";
 import { Portal } from "../../common/Portal";
 import MechanicalButton from "../../common/MechanicalButton";
 import GlitchButton from "../../common/GlitchButton";
@@ -37,6 +38,7 @@ const BeanStorage: React.FC = () => {
     settings,
     queueCloudSync
   } = useAppContext();
+  const [visibleCount, setVisibleCount] = useState(30);
 
   const { brewForm, dispatch } = useBrewContext();
   const beanPopupRef = useRef<HTMLDivElement>(null);
@@ -68,25 +70,29 @@ const BeanStorage: React.FC = () => {
       return;
     }
     
-    setBeans((prev) => {
-      const filtered = prev.filter((b) => b.name !== beanForm.name);
-      return [beanForm, ...filtered];
-    });
+    const saved = {
+      ...beanForm,
+      id: beanForm.id || crypto.randomUUID(),
+      createdAt: beanForm.createdAt || new Date().toISOString(),
+      name: beanForm.name.trim(),
+    };
+    setBeans((prev) => [saved, ...prev.filter((bean) => bean.id !== saved.id)]);
 
     // If currently brewing with this bean, update basic info in form
-    if (brewForm.selectedBeanName === beanForm.name) {
-      dispatch({ type: "UPDATE_FIELD", field: "roastLevel", value: beanForm.roastLevel });
-      dispatch({ type: "UPDATE_FIELD", field: "restDays", value: calcRestDays(beanForm.roastingDate) });
+    if (brewForm.selectedBeanId === saved.id) {
+      dispatch({ type: "UPDATE_FIELD", field: "bean", value: saved.name });
+      dispatch({ type: "UPDATE_FIELD", field: "roastLevel", value: saved.roastLevel });
+      dispatch({ type: "UPDATE_FIELD", field: "restDays", value: calcRestDays(saved.roastingDate) });
     }
 
     setBeanStorageView("list");
     queueCloudSync();
   };
 
-  const removeBeanInfo = (beanName: string) => {
-    setBeans((prev) => prev.filter((item) => item.name !== beanName));
-    if (brewForm.selectedBeanName === beanName) {
-      dispatch({ type: "UPDATE_FIELD", field: "selectedBeanName", value: "" });
+  const removeBeanInfo = (beanId: string) => {
+    setBeans((prev) => prev.filter((item) => item.id !== beanId));
+    if (brewForm.selectedBeanId === beanId) {
+      dispatch({ type: "UPDATE_FIELD", field: "selectedBeanId", value: "" });
       dispatch({ type: "SET_METHOD", method: "Brew" });
       dispatch({ type: "UPDATE_FIELD", field: "bean", value: "" });
       dispatch({ type: "UPDATE_FIELD", field: "roastLevel", value: "중배전" });
@@ -114,8 +120,8 @@ const BeanStorage: React.FC = () => {
         </div>
         <div className="flex items-center gap-2">
           <div className="hidden sm:block text-[10px] text-[var(--text-muted)] font-mono text-right mr-2 leading-tight">
-            OVERWRITE_IF_SAME_NAME<br/>
-            <span className="text-[var(--text-sub)]">원두 이름이 같다면 데이터를 덮어씁니다</span>
+            UNIQUE_BEAN_ID<br/>
+            <span className="text-[var(--text-sub)]">같은 이름의 원두를 별도로 저장합니다</span>
           </div>
           {beanStorageView === "list" && (
             <TacticalSortMenu 
@@ -280,10 +286,10 @@ const BeanStorage: React.FC = () => {
                   NO_RECORDS_FOUND
                 </div>
               )}
-              {sortedBeans.map((item) => (
+              {sortedBeans.slice(0, visibleCount).map((item) => (
                 <SwipeableRow 
-                  key={item.name} 
-                  onDelete={() => removeBeanInfo(item.name)}
+                  key={item.id}
+                  onDelete={() => removeBeanInfo(item.id)}
                   onEdit={() => loadBeanToForm(item)}
                 >
                   <div className="flex flex-col w-full p-4 sm:p-5 gap-3 bg-[var(--bg-base)] border border-[var(--border-main)] group cursor-pointer" onClick={() => setBeanPreview(item)}>
@@ -326,6 +332,7 @@ const BeanStorage: React.FC = () => {
                   </div>
                 </SwipeableRow>
               ))}
+              <LoadMoreButton shown={Math.min(visibleCount, sortedBeans.length)} total={sortedBeans.length} onClick={() => setVisibleCount(count => count + 30)} />
             </motion.div>
           )}
         </AnimatePresence>

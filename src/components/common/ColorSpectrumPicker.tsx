@@ -38,6 +38,17 @@ const ColorSpectrumPicker: React.FC<ColorSpectrumPickerProps> = ({ value, onChan
     <div className="space-y-4">
       <div 
         ref={containerRef}
+        role="slider"
+        tabIndex={0}
+        aria-label="포인트 색상 선택"
+        aria-valuetext={`색상 ${hue}도, 채도 ${saturation}%`}
+        onKeyDown={(event) => {
+          if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) return;
+          event.preventDefault();
+          const nextHue = (hue + (event.key === "ArrowRight" ? 5 : event.key === "ArrowLeft" ? -5 : 0) + 360) % 360;
+          const nextSat = Math.max(0, Math.min(100, saturation + (event.key === "ArrowUp" ? 5 : event.key === "ArrowDown" ? -5 : 0)));
+          onChange(`hsl(${nextHue}, ${nextSat}%, ${lightness}%)`);
+        }}
         onMouseDown={(e) => {
           handleInteract(e);
           const handleMove = (moe: MouseEvent) => handleInteract(moe as any);

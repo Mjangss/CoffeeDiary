@@ -7,7 +7,9 @@ import {
 } from "../../../utils";
 import MechanicalButton from "../../common/MechanicalButton";
 import ColorSpectrumPicker from "../../common/ColorSpectrumPicker";
-import { useFirebase } from "../../../hooks/useFirebase";
+import { useFirebaseActions } from "../../../context/FirebaseContext";
+import { validGrinderRange } from "../../../utils/validation";
+import { serializeDiary } from "../../../lib/localDiary";
 
 const Settings: React.FC = () => {
   const {
@@ -21,27 +23,52 @@ const Settings: React.FC = () => {
     user,
     cloudStatus,
     cloudStatusVisual,
+    localSaveError,
     queueCloudSync,
-    persistedPayload
+    persistedPayload,
+    legacyAvailable,
+    importLegacyData,
+    importDiaryBackup
   } = useAppContext();
 
   const { dispatch } = useBrewContext();
-  const { saveToCloud, loadFromCloud } = useFirebase();
+  const { saveToCloud, loadFromCloud } = useFirebaseActions();
   const [settingsKey, setSettingsKey] = useState(0);
+  const [backupError, setBackupError] = useState("");
+  const payloadSizeBytes = new TextEncoder().encode(serializeDiary(persistedPayload)).length;
+  const payloadSizeWarning = payloadSizeBytes >= 950_000 ? "클라우드 저장 한도에 가까워졌습니다. 백업 후 오래된 기록·로그를 정리하세요." : payloadSizeBytes >= 850_000 ? "저장 데이터가 커지고 있습니다. 클라우드 저장 한도에 도달하기 전에 백업을 권장합니다." : "";
+
+  const exportBackup = () => {
+    const url = URL.createObjectURL(new Blob([serializeDiary(persistedPayload)], { type: "application/json" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `coffee-diary-${new Date().toISOString().slice(0, 10)}.json`;
+    link.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+
+  const importBackup = async (file?: File) => {
+    if (!file || !window.confirm("현재 데이터를 백업하고 파일의 데이터로 교체할까요? 로그인 중이라면 클라우드에도 반영될 수 있습니다.")) return;
+    try {
+      importDiaryBackup(await file.text());
+      setBackupError("");
+    } catch (error) {
+      setBackupError("백업 파일을 가져오지 못했습니다. 파일 형식과 브라우저 저장 공간을 확인하세요. 기존 데이터는 유지됩니다.");
+      console.error("Failed to import backup", error);
+    }
+  };
 
   // 그라인더 추가 폼 로컬 상태
   const [newGrinderName, setNewGrinderName] = useState("");
   const [newGrinderMin, setNewGrinderMin] = useState("");
   const [newGrinderMax, setNewGrinderMax] = useState("");
   const [newGrinderStep, setNewGrinderStep] = useState("");
-
-  // Auto-save to cloud when entering Settings
-  React.useEffect(() => {
-    if (user) {
-      console.log("🚀 Entering Settings: Triggering Auto-Save...");
-      saveToCloud(persistedPayload, { withVisual: true });
-    }
-  }, []);
+  const [grinderAttempted, setGrinderAttempted] = useState(false);
+  const grinderName = newGrinderName.trim();
+  const grinderError = !grinderName ? "장비 이름을 입력하세요."
+    : !newGrinderMin || !newGrinderMax || !newGrinderStep ||
+      !validGrinderRange(Number(newGrinderMin), Number(newGrinderMax), Number(newGrinderStep))
+      ? "최소·최대는 올바른 순서여야 하고 간격은 양수여야 합니다." : "";
 
   const handleResetData = () => {
     if (window.confirm("⚠️ 모든 데이터를 초기화하시겠습니까? 클라우드 데이터도 삭제될 수 있습니다.")) {
@@ -51,8 +78,14 @@ const Settings: React.FC = () => {
       setRecipes([]);
       setRecords([]);
       dispatch({ type: "RESET_FORM" });
-      alert("데이터가 로컬에서 초기화되었습니다. 클라우드에 반영하려면 저장을 눌러주세요.");
+      alert("데이터가 초기화되었습니다. 로그인 상태라면 클라우드에도 자동 반영됩니다.");
     }
+  };
+
+  const handleLegacyImport = () => {
+    const destination = user?.email ?? "게스트 저장소";
+    if (!window.confirm(`이전 버전의 로컬 데이터를 ${destination}에 가져올까요? 현재 데이터는 백업한 뒤 교체되며, 로그인 중이라면 클라우드에도 반영될 수 있습니다.`)) return;
+    if (!importLegacyData()) alert("이전 데이터를 가져오지 못했습니다. 원본은 그대로 보관되어 있습니다.");
   };
 
   return (
@@ -73,6 +106,7 @@ const Settings: React.FC = () => {
       </div>
       
       <div className="space-y-10 py-2">
+        {payloadSizeWarning && <div role="alert" className="border border-amber-500/50 bg-amber-500/10 px-4 py-3 text-xs text-amber-300">{payloadSizeWarning} 현재 약 {(payloadSizeBytes / 1024).toFixed(0)}KB입니다.</div>}
         {/* 테마 및 디자인 */}
         <div className="space-y-4">
           <h3 className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)] pl-2 border-l-2" style={{ borderColor: 'var(--point-color)' }}>테마 및 디자인 (THEME_UI)</h3>
@@ -139,7 +173,7 @@ const Settings: React.FC = () => {
                        <p className="text-sm font-bold uppercase">{name}</p>
                        <p className="text-[9px] font-mono text-[var(--text-muted)] mt-1">RANGE: {range.min}-{range.max} / STEP: {range.step}</p>
                      </div>
-                     <button onClick={() => { const ng = { ...settings.grinders }; delete ng[name]; setSettings(s => ({ ...s, grinders: ng })); queueCloudSync(); }} className="text-[10px] font-mono text-rose-500 hover:underline">DELETE</button>
+                     <button onClick={() => { const grinders = { ...settings.grinders }; const grinderCalibrations = { ...settings.grinderCalibrations }; delete grinders[name]; delete grinderCalibrations[name]; setSettings(s => ({ ...s, grinders, grinderCalibrations })); queueCloudSync(); }} className="text-[10px] font-mono text-rose-500 hover:underline">DELETE</button>
                    </div>
                  ))}
                </div>
@@ -155,10 +189,14 @@ const Settings: React.FC = () => {
                    <div className="space-y-1"><span className="text-[9px] font-mono text-[var(--text-muted)]">MAX</span><input value={newGrinderMax} onChange={(e) => setNewGrinderMax(e.target.value)} type="number" step="0.1" className="bg-[var(--bg-surface)] border border-[var(--border-main)] p-2 w-full text-xs font-mono outline-none" placeholder="100" /></div>
                    <div className="space-y-1"><span className="text-[9px] font-mono text-[var(--text-muted)]">STEP</span><input value={newGrinderStep} onChange={(e) => setNewGrinderStep(e.target.value)} type="number" step="0.1" className="bg-[var(--bg-surface)] border border-[var(--border-main)] p-2 w-full text-xs font-mono outline-none" placeholder="0.5" /></div>
                  </div>
+                 {(grinderAttempted || newGrinderName || newGrinderMin || newGrinderMax || newGrinderStep) && grinderError &&
+                   <p role="alert" className="text-xs text-rose-500">{grinderError}</p>}
                  <MechanicalButton onClick={() => {
-                   if (newGrinderName && newGrinderMin && newGrinderMax && newGrinderStep) {
-                     setSettings(s => ({ ...s, grinders: { ...s.grinders, [newGrinderName]: { min: parseFloat(newGrinderMin), max: parseFloat(newGrinderMax), step: parseFloat(newGrinderStep) } } }));
+                   setGrinderAttempted(true);
+                   if (!grinderError) {
+                     setSettings(s => ({ ...s, grinders: { ...s.grinders, [grinderName]: { min: Number(newGrinderMin), max: Number(newGrinderMax), step: Number(newGrinderStep) } } }));
                      setNewGrinderName(""); setNewGrinderMin(""); setNewGrinderMax(""); setNewGrinderStep("");
+                     setGrinderAttempted(false);
                      queueCloudSync();
                    }
                  }} className="py-2 text-[10px] font-bold" style={{ backgroundColor: 'var(--point-color)' }}>ADD_GRINDER</MechanicalButton>
@@ -191,14 +229,27 @@ const Settings: React.FC = () => {
           <h3 className="text-[10px] font-mono uppercase tracking-widest text-[var(--text-muted)] pl-2 border-l-2" style={{ borderColor: 'var(--point-color)' }}>클라우드 및 계정 (CLOUD_SYST)</h3>
           <div className="p-5 border border-[var(--border-main)] bg-[var(--bg-base)] space-y-6">
             <div className="flex items-center justify-between">
-               <div><p className="text-sm font-bold uppercase">ACCOUNT_STATUS</p><p className="text-[10px] font-mono text-[var(--text-muted)] mt-1">{user ? user.email : "GUEST_MODE (OFFLINE)"}</p></div>
+               <div><p className="text-sm font-bold">계정 상태</p><p className="text-[10px] font-mono text-[var(--text-muted)] mt-1">{user ? user.email : "게스트 모드 (오프라인)"}</p></div>
                <div className="flex items-center gap-3"><span className={`text-[10px] font-mono font-bold ${cloudStatusVisual === 'error' ? 'text-rose-500' : 'text-emerald-500'}`}>{cloudStatus.toUpperCase()}</span></div>
             </div>
             <div className="grid grid-cols-2 gap-3 pt-4 border-t border-[var(--border-main)]">
-               <MechanicalButton onClick={() => saveToCloud(persistedPayload, { withVisual: true })} className="py-4 text-xs font-bold uppercase transition-all" style={{ backgroundColor: 'var(--point-color)' }}>PUSH_TO_CLOUD</MechanicalButton>
-               <MechanicalButton onClick={() => loadFromCloud()} className="py-4 text-xs font-bold uppercase text-[var(--text-strong)] border border-[var(--border-main)]">FETCH_FROM_CLOUD</MechanicalButton>
+               <MechanicalButton onClick={() => saveToCloud(persistedPayload, { withVisual: true })} className="py-4 text-xs font-bold transition-all" style={{ backgroundColor: 'var(--point-color)' }}>클라우드에 저장</MechanicalButton>
+               <MechanicalButton onClick={() => loadFromCloud()} className="py-4 text-xs font-bold text-[var(--text-strong)] border border-[var(--border-main)]">클라우드에서 불러오기</MechanicalButton>
             </div>
-            <p className="text-[9px] text-center font-mono text-[var(--text-muted)] leading-tight">CLOUD_AUTO_SYNC_ENABLED / SECURE_ENCRYPTION_ACTIVE<br/>서버 저장 시 모든 이전 데이터가 덮어씌워집니다.</p>
+            <p className="text-[9px] text-center font-mono text-[var(--text-muted)] leading-tight">변경 사항은 로컬에 먼저 보관한 뒤 자동 동기화됩니다.<br/>다른 기기와 충돌하면 자동 덮어쓰기를 멈추고 상태를 표시합니다.</p>
+            {localSaveError && <p role="alert" className="text-xs text-rose-500">{localSaveError}</p>}
+            <div className="flex flex-wrap gap-3 border-t border-[var(--border-main)] pt-4">
+              <button type="button" onClick={exportBackup} className="border border-[var(--border-main)] px-3 py-2 text-xs">JSON 백업 내보내기</button>
+              <input type="file" accept="application/json,.json" aria-label="JSON 백업 가져오기"
+                className="max-w-full border border-[var(--border-main)] px-3 py-2 text-xs"
+                onChange={(event) => {
+                  void importBackup(event.target.files?.[0]);
+                  event.target.value = "";
+                }} />
+            </div>
+            {backupError && <p role="alert" className="text-xs text-rose-500">{backupError}</p>}
+            {legacyAvailable && <button type="button" onClick={handleLegacyImport} className="w-full border border-amber-500/50 px-3 py-3 text-left text-xs text-amber-400 hover:bg-amber-500/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400">이전 버전 로컬 데이터 가져오기</button>}
+            {cloudStatus.includes("충돌") && <p className="text-[10px] text-rose-500 leading-relaxed">충돌 해결: PUSH는 이 기기 데이터를 클라우드에 반영하고, FETCH는 클라우드 데이터를 불러옵니다. 어느 쪽이든 교체되는 데이터는 먼저 이 브라우저에 백업됩니다.</p>}
           </div>
         </div>
 

@@ -83,6 +83,19 @@ const NavIcon: React.FC<NavIconProps> = ({ type, active }) => {
       </svg>
     );
   }
+  if (type === "grinder-calibration") {
+    // Calibration: Sliders / Dial
+    return (
+      <svg viewBox="0 0 24 24" className={`h-5 w-5 ${glowClass}`} fill="none" stroke={color} strokeWidth={strokeWidth}>
+        <path d="M4 8h16M4 16h16" opacity="0.3" />
+        <circle cx="10" cy="8" r="2.5" fill={color} />
+        <circle cx="15" cy="16" r="2.5" fill={color} />
+        <path d="M12 2v2M12 20v2M2 12h2M20 12h2" opacity="0.4" strokeDasharray="1 2" />
+        <NodeDot cx={12} cy={12} pulse={true} />
+        <NodeDot cx={4} cy={4} pulse={false} />
+      </svg>
+    );
+  }
   if (type === "settings") {
     // Settings: Gear system + Radar Crosshair
     return (

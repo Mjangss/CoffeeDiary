@@ -4,12 +4,15 @@ import "./index.css";
 import App from "./App";
 import { AppProvider } from "./context/AppContext";
 import { BrewProvider } from "./context/BrewContext";
+import { FirebaseProvider } from "./context/FirebaseContext";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <AppProvider>
       <BrewProvider>
-        <App />
+        <FirebaseProvider>
+          <App />
+        </FirebaseProvider>
       </BrewProvider>
     </AppProvider>
   </StrictMode>

@@ -1,6 +1,6 @@
 export type BrewMethod = "Brew" | "Espresso" | "OXO";
 export type OXOFilterType = "종이" | "메탈" | "없음";
-export type Grinder = "Millab M01" | "HammerHead" | "K-Ultra" | "EK-43";
+export type Grinder = "Millab M01" | "HammerHead" | "Nitro Blade" | "Tiger Shark" | "K-Ultra" | "EK-43";
 export type RoastLevel = "약약배전" | "약배전" | "중약배전" | "중배전" | "중강배전" | "강배전";
 export type Dripper = "V60" | "V60 세라믹" | "알파" | "노암니" | "B75" | "벡터";
 export type BrewWater = "평창수" | "백산수" | "아이시스" | "평딥수" | "백딥수" | "아딥수";
@@ -24,6 +24,7 @@ export type CupScores = {
 };
 
 export type BeanInfo = {
+  id: string;
   name: string;
   roastery: string;
   roastingDate: string;
@@ -42,6 +43,7 @@ export type InventoryStatus = "RESTING" | "ACTIVE" | "FROZEN" | "DEPLETED";
 
 export type InventoryItem = {
   id: string;
+  beanId?: string;
   beanName: string;
   roastery: string;
   purchaseDate: string;
@@ -54,11 +56,12 @@ export type InventoryItem = {
   frozenRestDays?: number;
   frozenDurationMs?: number;
   lastFrozenAt?: string;
-  manualLogs?: Array<{ date: string; amount: number; type: "INC" | "DEC"; reason?: string }>;
+  manualLogs?: Array<{ id?: string; recordId?: string; date: string; amount: number; type: "INC" | "DEC"; reason?: string }>;
 };
 
 export type GrinderProfile = {
   bean: string;
+  beanId?: string;
   method: BrewMethod;
   grinder: Grinder;
   dripper: Dripper;
@@ -72,6 +75,7 @@ export type BrewRecord = {
   id: string;
   createdAt: string;
   bean: string;
+  beanId?: string;
   method: BrewMethod;
   grinder: Grinder;
   brewWater: BrewWater;
@@ -86,6 +90,8 @@ export type BrewRecord = {
   restDays: number;
   brewSec: number;
   recipe: string;
+  recipeId?: string;
+  recipeSnapshot?: RecipeSnapshot;
   baseClick: number;
   memo: string;
   inventoryId?: string;
@@ -117,8 +123,13 @@ export type RecipeInfo = {
   oxoLowerFilter?: OXOFilterType;
 };
 
+export type RecipeSnapshot = Pick<RecipeInfo,
+  "name" | "method" | "drinkType" | "dose" | "useSwitch" | "pours" |
+  "dilutionGuide" | "oxoUpperFilter" | "oxoLowerFilter">;
+
 export type AppSettings = {
   grinders: Record<string, { min: number; max: number; step: number }>;
+  grinderCalibrations: Record<string, Record<string, number>>;
   drippers: string[];
   waters: string[];
   filters: string[];
@@ -163,7 +174,7 @@ export type BrewFormState = {
   memo: string;
   selectedInventoryId: string;
   selectedRecipeId: string;
-  selectedBeanName: string;
+  selectedBeanId: string;
   oxoUpperFilter: OXOFilterType;
   oxoLowerFilter: OXOFilterType;
 };
@@ -178,4 +189,4 @@ export type BrewAction =
   | { type: "SET_BASE_CLICK"; value: number };
 
 export type CloudStatusVisual = "idle" | "loading" | "success" | "error";
-export type PageKey = "coffee-diary" | "coffee-diary-records" | "bean-storage" | "recipe-storage" | "inventory" | "settings" | "brewing-timer";
+export type PageKey = "coffee-diary" | "coffee-diary-records" | "bean-storage" | "recipe-storage" | "inventory" | "grinder-calibration" | "settings" | "brewing-timer";

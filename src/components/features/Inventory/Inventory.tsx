@@ -1,13 +1,14 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAppContext } from "../../../context/AppContext";
 import { InventoryItem, InventoryStatus } from "../../../types";
 import { EMPTY_INVENTORY_FORM } from "../../../constants";
 import { 
   getTransitionVariants, 
-  calcRestDays, 
+  calcInventoryRestDays,
   getAgingStatus, 
   getAgingStatusDetail,
+  round,
   BACKDROP_VARIANTS,
   MODAL_VARIANTS,
 } from "../../../utils";
@@ -16,6 +17,9 @@ import MechanicalButton from "../../common/MechanicalButton";
 import SwipeableRow from "../../common/SwipeableRow";
 import TacticalNumericInput from "../../common/TacticalNumericInput";
 import TacticalSortMenu from "../../common/TacticalSortMenu";
+import { validMeasure, validStockOutflow } from "../../../utils/validation";
+import { reviseInitialWeight } from "../../../lib/recordLedger";
+import LoadMoreButton from "../../common/LoadMoreButton";
 
 const Inventory: React.FC = () => {
   const {
@@ -45,13 +49,14 @@ const Inventory: React.FC = () => {
   } = useAppContext();
 
   // const { dispatch } = useBrewContext();
+  const [visibleCount, setVisibleCount] = useState(30);
 
   const sortedInventory = useMemo(() => {
     const list = [...inventory];
     const baseSorted = list.sort((a, b) => {
       if (inventorySortMode === "freshness") {
-        const ad = calcRestDays(a.roastDate, a.frozenDurationMs, a.lastFrozenAt, a.status === "FROZEN");
-        const bd = calcRestDays(b.roastDate, b.frozenDurationMs, b.lastFrozenAt, b.status === "FROZEN");
+        const ad = calcInventoryRestDays(a);
+        const bd = calcInventoryRestDays(b);
         return ad - bd;
       }
       if (inventorySortMode === "weight") {
@@ -67,6 +72,9 @@ const Inventory: React.FC = () => {
 
     return inventorySortOrder === "desc" ? baseSorted.reverse() : baseSorted;
   }, [inventory, inventorySortMode, inventorySortOrder]);
+  const inventoryWeightError = validMeasure(inventoryForm.initialWeight, 0.1, Infinity, 0.1) &&
+    Number.isFinite(inventoryForm.remainingWeight) && inventoryForm.remainingWeight >= 0
+    ? "" : "초기 매입량은 양수이고 잔량은 음수가 아니어야 합니다.";
 
   const applyInventoryStatusChange = (id: string, nextStatus: InventoryStatus) => {
     const now = new Date().toISOString();
@@ -184,10 +192,13 @@ const Inventory: React.FC = () => {
                 </div>
               ) : (
                 <div className="grid gap-3">
-                  {sortedInventory.map((item) => {
+                  {sortedInventory.slice(0, visibleCount).map((item) => {
+                    const amount = Number(inventoryInputValues[item.id] ?? "18");
+                    const amountError = validMeasure(amount, 0.1, Infinity, 0.1) ? "" : "입출고량은 양수이며 0.1g 단위여야 합니다.";
+                    const decrementError = validStockOutflow(amount, item.remainingWeight) ? "" : "재고 잔량보다 많이 출고할 수 없습니다.";
                     const remainPercent = Math.max(0, Math.min(100, (item.remainingWeight / item.initialWeight) * 100));
                     const isLow = remainPercent < 20 && remainPercent > 0;
-                    const restDiff = calcRestDays(item.roastDate, item.frozenDurationMs, item.lastFrozenAt, item.status === "FROZEN");
+                    const restDiff = calcInventoryRestDays(item);
                     
                     let statusBadge = null;
                     if (item.status === "RESTING") statusBadge = <span className="bg-yellow-500/20 text-yellow-500 border border-yellow-500/30 px-2 py-0.5 text-[10px] font-bold">RESTING (D+{restDiff})</span>;
@@ -195,7 +206,7 @@ const Inventory: React.FC = () => {
                     else if (item.status === "FROZEN") statusBadge = <span className="bg-cyan-500/20 text-cyan-500 border border-cyan-500/30 px-2 py-0.5 text-[10px] font-bold">FROZEN</span>;
                     else if (item.status === "DEPLETED" || item.remainingWeight === 0) statusBadge = <span className="bg-zinc-800 text-[var(--text-muted)] border border-[var(--border-hover)] px-2 py-0.5 text-[10px] font-bold">DEPLETED</span>;
 
-                    const matchingBean = beans.find(b => b.name === item.beanName);
+                    const matchingBean = beans.find(bean => bean.id === item.beanId);
                     const agingStatus = matchingBean ? getAgingStatus({ ...matchingBean, roastingDate: item.roastDate }) : "NOT_SET";
 
                     return (
@@ -275,12 +286,12 @@ const Inventory: React.FC = () => {
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  const amount = parseFloat(inventoryInputValues[item.id] ?? "18") || 0;
+                                  if (amountError || decrementError) return;
                                   setInventory(prev => prev.map(i => {
                                     if (i.id !== item.id) return i;
-                                    const newWeight = Math.max(0, i.remainingWeight - amount);
+                                    const newWeight = round(i.remainingWeight - amount, 10);
                                     const newLogs = i.manualLogs ? [...i.manualLogs] : [];
-                                    newLogs.push({ date: new Date().toISOString(), amount, type: "DEC" });
+                                    newLogs.push({ id: crypto.randomUUID(), date: new Date().toISOString(), amount, type: "DEC" });
                                     return { 
                                       ...i, 
                                       remainingWeight: newWeight, 
@@ -299,6 +310,8 @@ const Inventory: React.FC = () => {
                                 <input 
                                   type="number"
                                   step="0.1"
+                                  min="0.1"
+                                  aria-invalid={Boolean(amountError)}
                                   value={inventoryInputValues[item.id] ?? "18"}
                                   onChange={(e) => setInventoryInputValues(prev => ({ ...prev, [item.id]: e.target.value }))}
                                   onClick={(e) => e.stopPropagation()}
@@ -309,12 +322,12 @@ const Inventory: React.FC = () => {
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  const amount = parseFloat(inventoryInputValues[item.id] ?? "18") || 0;
+                                  if (amountError || !Number.isFinite(item.remainingWeight) || item.remainingWeight < 0) return;
                                   setInventory(prev => prev.map(i => {
                                     if (i.id !== item.id) return i;
-                                    const newWeight = i.remainingWeight + amount;
+                                    const newWeight = round(i.remainingWeight + amount, 10);
                                     const newLogs = i.manualLogs ? [...i.manualLogs] : [];
-                                    newLogs.push({ date: new Date().toISOString(), amount, type: "INC" });
+                                    newLogs.push({ id: crypto.randomUUID(), date: new Date().toISOString(), amount, type: "INC" });
                                     return { 
                                       ...i, 
                                       remainingWeight: newWeight, 
@@ -330,10 +343,12 @@ const Inventory: React.FC = () => {
                               </button>
                             </div>
                           </div>
+                          {(amountError || decrementError) && <p role="alert" className="text-xs text-rose-500">{amountError || decrementError}</p>}
                         </div>
                       </SwipeableRow>
                     );
                   })}
+                  <LoadMoreButton shown={Math.min(visibleCount, sortedInventory.length)} total={sortedInventory.length} onClick={() => setVisibleCount(count => count + 30)} />
                 </div>
               )}
             </motion.div>
@@ -357,19 +372,20 @@ const Inventory: React.FC = () => {
                     <label className="text-xs font-mono text-[var(--text-dim)]">원두 선택 (LINK.BEAN)</label>
                     <select 
                       className="w-full bg-[var(--bg-surface)] border border-[var(--border-main)] p-3 text-sm focus:border-[var(--point-color)] outline-none"
-                      value={inventoryForm.beanName}
+                      value={inventoryForm.beanId ?? ""}
                       onChange={(e) => {
-                        const selected = beans.find(b => b.name === e.target.value);
+                        const selected = beans.find(bean => bean.id === e.target.value);
                         setInventoryForm(prev => ({ 
                           ...prev, 
-                          beanName: e.target.value, 
+                          beanId: selected?.id,
+                          beanName: selected?.name ?? "",
                           roastery: selected?.roastery || prev.roastery 
                         }));
                       }}
                     >
                       <option value="">-- [원두] 보관함에서 불러오기 --</option>
-                      {beans.map(b => (
-                        <option key={b.name} value={b.name}>{b.name} ({b.roastery})</option>
+                      {beans.map(bean => (
+                        <option key={bean.id} value={bean.id}>{bean.name} ({bean.roastery})</option>
                       ))}
                     </select>
                   </div>
@@ -379,7 +395,7 @@ const Inventory: React.FC = () => {
                       className="w-full bg-[var(--bg-surface)] border border-[var(--border-main)] p-3 text-sm focus:border-[var(--point-color)] outline-none"
                       placeholder="직접 입력"
                       value={inventoryForm.beanName}
-                      onChange={(e) => setInventoryForm(p => ({ ...p, beanName: e.target.value }))}
+                      onChange={(e) => setInventoryForm(p => ({ ...p, beanId: undefined, beanName: e.target.value }))}
                     />
                   </div>
                 </div>
@@ -411,7 +427,8 @@ const Inventory: React.FC = () => {
                 <div className="grid gap-4 md:grid-cols-2">
                   <div className="space-y-1">
                     <label className="text-xs font-mono text-[var(--text-dim)]">초기 매입량(g)</label>
-                    <TacticalNumericInput value={inventoryForm.initialWeight} onChange={(val) => setInventoryForm(p => ({ ...p, initialWeight: val, remainingWeight: val }))} className="w-full bg-[var(--bg-surface)] border border-[var(--border-main)] p-3 text-sm focus:border-[var(--point-color)] outline-none" min={0} />
+                    <TacticalNumericInput value={inventoryForm.initialWeight} onChange={(val) => setInventoryForm(p => editingInventoryId ? reviseInitialWeight(p, val) : { ...p, initialWeight: val, remainingWeight: val })} invalid={Boolean(inventoryWeightError)} className="w-full bg-[var(--bg-surface)] border border-[var(--border-main)] p-3 text-sm focus:border-[var(--point-color)] outline-none" min={0.1} step={0.1} />
+                    {inventoryWeightError && <p role="alert" className="text-xs text-rose-500">{inventoryWeightError}</p>}
                   </div>
                 </div>
                 
@@ -423,7 +440,7 @@ const Inventory: React.FC = () => {
                 <div className="pt-4 border-t border-[var(--border-main)]">
                   <MechanicalButton
                     onClick={() => {
-                      if (!inventoryForm.beanName.trim()) return;
+                      if (!inventoryForm.beanName.trim() || inventoryWeightError) return;
                       const nowIso = new Date().toISOString();
                       if (editingInventoryId) {
                         setInventory(prev => prev.map(i => {
@@ -516,15 +533,15 @@ const Inventory: React.FC = () => {
                        <div>
                           <p className="text-[10px] text-[var(--text-muted)] font-mono uppercase mb-1">Resting Days</p>
                           <p className="text-xs font-mono text-[var(--point-color)] bg-[var(--bg-base)] p-2 border border-[var(--border-main)] font-bold">
-                             D+{calcRestDays(inventoryPreview.roastDate, inventoryPreview.frozenDurationMs, inventoryPreview.lastFrozenAt, inventoryPreview.status === "FROZEN")}
+                             D+{calcInventoryRestDays(inventoryPreview)}
                           </p>
                        </div>
                   </div>
 
                   <div className="bg-[var(--bg-deep)]/50 p-4 border border-zinc-800 space-y-3">
                     {(() => {
-                      const matchingBean = beans.find(b => b.name === inventoryPreview.beanName);
-                      const restDays = calcRestDays(inventoryPreview.roastDate, inventoryPreview.frozenDurationMs, inventoryPreview.lastFrozenAt, inventoryPreview.status === "FROZEN");
+                      const matchingBean = beans.find(bean => bean.id === inventoryPreview.beanId);
+                      const restDays = calcInventoryRestDays(inventoryPreview);
                       
                       if (!matchingBean) {
                         return (

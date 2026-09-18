@@ -60,7 +60,9 @@ export const useThemeApplier = (theme: AppSettings["theme"]) => {
       .text-base { font-size: calc(1rem * ${textScale}) !important; line-height: calc(1.5rem * ${textScale}) !important; }
       .text-lg { font-size: calc(1.125rem * ${textScale}) !important; line-height: calc(1.75rem * ${textScale}) !important; }
       .text-xl { font-size: calc(1.25rem * ${textScale}) !important; line-height: calc(1.75rem * ${textScale}) !important; }
-      .text-[10px] { font-size: calc(10px * ${textScale}) !important; }
+      .text-\\[8px\\] { font-size: max(0.75rem, calc(8px * ${textScale})) !important; line-height: 1rem !important; }
+      .text-\\[9px\\] { font-size: max(0.75rem, calc(9px * ${textScale})) !important; line-height: 1rem !important; }
+      .text-\\[10px\\] { font-size: max(0.75rem, calc(10px * ${textScale})) !important; line-height: 1.125rem !important; }
     `;
   }, [theme]);
 };

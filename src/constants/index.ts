@@ -9,6 +9,7 @@ import {
   BrewFormState,
   RecipeInfo
 } from "../types";
+import { localDateString } from "../utils/date";
 
 export const DEFAULT_CUP_SCORES: CupScores = {
   acidity: 6,
@@ -30,18 +31,18 @@ export const METHOD_CONFIG: Record<BrewMethod, MethodConfig> = {
 export const EMPTY_INVENTORY_FORM: Omit<InventoryItem, "id" | "createdAt"> = {
   beanName: "",
   roastery: "",
-  purchaseDate: new Date().toISOString().split("T")[0],
-  roastDate: new Date().toISOString().split("T")[0],
+  purchaseDate: localDateString(),
+  roastDate: localDateString(),
   initialWeight: 200,
   remainingWeight: 200,
   status: "ACTIVE",
   memo: "",
 };
 
-export const EMPTY_BEAN_FORM: Omit<BeanInfo, "createdAt"> = {
+export const EMPTY_BEAN_FORM: Omit<BeanInfo, "id" | "createdAt"> = {
   name: "",
   roastery: "",
-  roastingDate: new Date().toISOString().split("T")[0],
+  roastingDate: localDateString(),
   region: "",
   variety: "",
   altitude: "",
@@ -74,19 +75,31 @@ export const EMPTY_RECIPE_FORM: Omit<RecipeInfo, "id" | "createdAt"> = {
 };
 
 export const STORAGE_KEY = "notion-grind-engine-v3";
+export const DATA_SCHEMA_VERSION = 4;
 export const CLOUD_DOC_KEY = "diary";
 export const MAX_CUP_SCORE = 10;
 export const CUP_SCORE_STEP = 0.5;
 
 export const GRINDER_RANGE: Record<string, { min: number; max: number; step: number }> = {
   "Millab M01": { min: 0.1, max: 10.0, step: 0.1 },
-  HammerHead: { min: 1, max: 50, step: 1 },
+  "HammerHead": { min: 1, max: 50, step: 1 },
+  "Nitro Blade": { min: 1, max: 50, step: 1 },
+  "Tiger Shark": { min: 1, max: 50, step: 1 },
   "K-Ultra": { min: 0.1, max: 15.0, step: 0.1 },
   "EK-43": { min: 0.1, max: 16.0, step: 0.1 },
 };
 
+export const defaultBaseClick = (method: BrewMethod, grinder: string) => {
+  const { min, max, step } = GRINDER_RANGE[grinder] ?? { min: 0.1, max: 20, step: 0.1 };
+  const bounded = Math.min(max, Math.max(min, METHOD_CONFIG[method].baselineClick));
+  return Number(Math.min(max, min + Math.round((bounded - min) / step) * step).toFixed(1));
+};
+
+const INITIAL_BASE_CLICK = defaultBaseClick("Brew", "Millab M01");
+
 export const DEFAULT_SETTINGS: AppSettings = {
   grinders: { ...GRINDER_RANGE },
+  grinderCalibrations: {},
   drippers: ["V60", "V60 세라믹", "알파", "노암니", "B75", "벡터"],
   waters: ["평창수", "백산수", "아이시스", "평딥수", "백딥수", "아딥수"],
   filters: ["하리오 기본", "하리오 메테오", "시바리스트", "th-3"],
@@ -118,12 +131,12 @@ export const INITIAL_BREW_FORM: BrewFormState = {
   brewSec: 31,
   recipe: "",
   dose: 20,
-  baseClick: 18.5,
-  baseClickInput: "18.5",
+  baseClick: INITIAL_BASE_CLICK,
+  baseClickInput: INITIAL_BASE_CLICK.toFixed(1),
   memo: "",
   selectedInventoryId: "",
   selectedRecipeId: "",
-  selectedBeanName: "",
+  selectedBeanId: "",
   oxoUpperFilter: "종이",
   oxoLowerFilter: "종이",
 };

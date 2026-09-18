@@ -6,8 +6,10 @@ import {
   Dripper,
   RecipePour,
   RecipeInfo,
-  BeanInfo
+  BeanInfo,
+  InventoryItem
 } from "../types";
+import { localDateString } from "./date";
 import {
   DEFAULT_CUP_SCORES,
   MAX_CUP_SCORE,
@@ -58,10 +60,12 @@ export const keyOf = (bean: string, method: BrewMethod, grinder: Grinder, drippe
 };
 
 export const normalizeClock = (value: string) => {
-  const cleaned = value.replace(/[^0-9]/g, "").slice(0, 4);
-  const mm = cleaned.slice(0, 2).padEnd(2, "0");
-  const ss = cleaned.slice(2, 4).padEnd(2, "0");
-  return `${mm}:${clamp(Number(ss), 0, 59).toString().padStart(2, "0")}`;
+  const parts = value.trim().match(/^(\d{1,2}):(\d{1,2})$/);
+  if (value.includes(":") && !parts) return "00:00";
+  const digits = value.replace(/\D/g, "").slice(0, 4).padStart(4, "0");
+  const mm = parts ? Number(parts[1]) : Number(digits.slice(0, 2));
+  const ss = parts ? Number(parts[2]) : Number(digits.slice(2));
+  return `${clamp(mm, 0, 10).toString().padStart(2, "0")}:${clamp(ss, 0, 59).toString().padStart(2, "0")}`;
 };
 
 export const parseClockParts = (clock: string) => {
@@ -75,21 +79,6 @@ export const parseClockParts = (clock: string) => {
 export const toClock = (mm: number, ss: number) => `${clamp(mm, 0, 10).toString().padStart(2, "0")}:${clamp(ss, 0, 59).toString().padStart(2, "0")}`;
 
 export const isPourFilled = (pour: RecipePour) => pour.waterMl > 0;
-
-export const enforceLinkedPourStarts = (pours: RecipePour[]) => {
-  let previousEnd = "00:00";
-  return pours.map((pour, idx) => {
-    const normalizedStart = normalizeClock(pour.start);
-    const normalizedEnd = normalizeClock(pour.end);
-    if (idx === 0) {
-      previousEnd = normalizedEnd;
-      return { ...pour, start: normalizedStart, end: normalizedEnd };
-    }
-    const linked = { ...pour, start: previousEnd, end: normalizedEnd };
-    previousEnd = normalizedEnd;
-    return linked;
-  });
-};
 
 export const formatClockToKorean = (clock: string) => {
   const [mmRaw = "00", ssRaw = "00"] = clock.split(":");
@@ -151,15 +140,18 @@ export const parseTimeToSeconds = (timeStr: string) => {
  * @param isFrozen - 현재 냉동 상태 여부
  * @returns 실효 숙성 일수 (0~365 범위로 클램핑)
  */
-export const calcRestDays = (roastDate: string, frozenDurationMs: number = 0, lastFrozenAt?: string, isFrozen: boolean = false) => {
+export const calcRestDays = (roastDate: string, frozenDurationMs: number = 0, lastFrozenAt?: string, isFrozen: boolean = false, nowMs = Date.now()) => {
   const roastTime = new Date(roastDate).getTime();
   if (Number.isNaN(roastTime)) return 0;
 
-  const effectiveNow = (isFrozen && lastFrozenAt) ? new Date(lastFrozenAt).getTime() : Date.now();
+  const effectiveNow = (isFrozen && lastFrozenAt) ? new Date(lastFrozenAt).getTime() : nowMs;
   const netDuration = effectiveNow - roastTime - frozenDurationMs;
 
   return clamp(Math.floor(Math.max(0, netDuration) / (1000 * 60 * 60 * 24)), 0, 365);
 };
+
+export const calcInventoryRestDays = (item: Pick<InventoryItem, "roastDate" | "frozenDurationMs" | "lastFrozenAt" | "status">, nowMs = Date.now()) =>
+  calcRestDays(item.roastDate, item.frozenDurationMs, item.lastFrozenAt, item.status === "FROZEN", nowMs);
 
 export const getAgingStatus = (bean: BeanInfo, overrideRestDays?: number) => {
   if (bean.peakStart === undefined || bean.peakEnd === undefined) return "NOT_SET";
@@ -458,7 +450,7 @@ export const handleDownloadScreenshot = async (ref: React.RefObject<HTMLDivEleme
     });
 
     const link = document.createElement("a");
-    link.download = `${filename}_${new Date().toISOString().split("T")[0]}.png`;
+    link.download = `${filename}_${localDateString()}.png`;
     link.href = dataUrl;
     document.body.appendChild(link);
     link.click();

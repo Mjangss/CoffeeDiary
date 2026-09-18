@@ -1,4 +1,4 @@
-import React, { useMemo, useRef } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAppContext } from "../../../context/AppContext";
 import { RecipeInfo, RecipePour, RecipeDrinkType, PourSwitchState, BrewMethod, OXOFilterType } from "../../../types";
@@ -13,11 +13,13 @@ import {
   MODAL_VARIANTS
 } from "../../../utils";
 import { Portal } from "../../common/Portal";
+import LoadMoreButton from "../../common/LoadMoreButton";
 import MechanicalButton from "../../common/MechanicalButton";
 import GlitchButton from "../../common/GlitchButton";
 import SwipeableRow from "../../common/SwipeableRow";
 import TacticalNumericInput from "../../common/TacticalNumericInput";
 import TacticalSortMenu from "../../common/TacticalSortMenu";
+import { validMeasure, validPourTime, validRecipeTimeline } from "../../../utils/validation";
 
 const MINUTE_OPTIONS = Array.from({ length: 11 }, (_, i) => i);
 const SECOND_OPTIONS = Array.from({ length: 60 }, (_, i) => i);
@@ -41,6 +43,7 @@ const RecipeStorage: React.FC = () => {
     settings,
     queueCloudSync
   } = useAppContext();
+  const [visibleCount, setVisibleCount] = useState(30);
 
   const recipePopupRef = useRef<HTMLDivElement>(null);
 
@@ -101,16 +104,24 @@ const RecipeStorage: React.FC = () => {
     const dilutionVals = parseDilutionAmount(recipeForm.dilutionGuide);
     return calculateRatioText(recipeForm.dose, totalRecipePourWater, dilutionVals);
   }, [totalRecipePourWater, recipeForm.dose, recipeForm.dilutionGuide]);
+  const recipeDoseError = validMeasure(recipeForm.dose, 1, 100, 0.1) ? "" : "원두량은 1~100g, 0.1g 단위여야 합니다.";
+  const pourError = (pour: RecipePour) => {
+    if (pour.start === "00:00" && pour.end === "00:00" && pour.waterMl === 0) return "";
+    if (!validMeasure(pour.waterMl, 0, 2000, 1)) return "물량은 0~2000ml의 정수여야 합니다.";
+    return validPourTime(pour.start, pour.end) ? "" : "시작 시간은 종료 시간보다 빨라야 합니다.";
+  };
 
   const saveRecipeInfo = () => {
     if (!recipeForm.name.trim()) {
       alert("⚠️ 레시피 이름을 입력해주세요.");
       return;
     }
+    const timelineError = validRecipeTimeline(recipeForm.pours);
+    if (recipeDoseError || recipeForm.pours.some(pourError) || timelineError) return;
     
     // Filter out invalid pours and SORT them by start time to ensure consistency
     const finalPours = recipeForm.pours
-      .filter(p => p.end !== "00:00")
+      .filter(p => !(p.start === "00:00" && p.end === "00:00" && p.waterMl === 0))
       .sort((a, b) => {
         const aSec = parseTimeToSeconds(a.start);
         const bSec = parseTimeToSeconds(b.start);
@@ -125,10 +136,7 @@ const RecipeStorage: React.FC = () => {
       pours: finalPours
     };
 
-    setRecipes((prev) => {
-      const filtered = prev.filter((r) => r.id !== recipeToSave.id && r.name !== recipeToSave.name);
-      return [recipeToSave, ...filtered];
-    });
+    setRecipes((prev) => [recipeToSave, ...prev.filter((recipe) => recipe.id !== recipeToSave.id)]);
 
     setRecipeStorageView("list");
     queueCloudSync();
@@ -251,9 +259,10 @@ const RecipeStorage: React.FC = () => {
                 <label className="flex flex-col space-y-1.5">
                   <span className="text-[10px] text-[var(--text-muted)] font-mono uppercase tracking-widest">원두량 (DOSE)</span>
                   <div className="relative">
-                    <TacticalNumericInput value={recipeForm.dose} onChange={(val) => updateRecipeForm("dose", val)} className="w-full bg-[var(--bg-surface)] border border-[var(--border-main)] p-3 pr-8 text-sm focus:border-[var(--point-color)] outline-none rounded-none text-[var(--text-strong)] font-medium font-mono" min={1} max={100} step={0.1} />
+                    <TacticalNumericInput value={recipeForm.dose} onChange={(val) => updateRecipeForm("dose", val)} invalid={Boolean(recipeDoseError)} className="w-full bg-[var(--bg-surface)] border border-[var(--border-main)] p-3 pr-8 text-sm focus:border-[var(--point-color)] outline-none rounded-none text-[var(--text-strong)] font-medium font-mono" min={1} max={100} step={0.1} />
                     <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-mono text-[var(--text-muted)]">G</span>
                   </div>
+                  {recipeDoseError && <p role="alert" className="text-xs text-rose-500">{recipeDoseError}</p>}
                 </label>
                 <label className="flex items-center gap-3 border border-[var(--border-main)] bg-[var(--bg-surface)] px-4 py-3 sm:col-span-2 lg:col-span-4 cursor-pointer select-none">
                   <input type="checkbox" checked={recipeForm.useSwitch} onChange={(e) => updateRecipeForm("useSwitch", e.target.checked)} className="size-4 rounded-none accent-[var(--point-color)]" />
@@ -286,7 +295,7 @@ const RecipeStorage: React.FC = () => {
                 <h3 className="text-[10px] text-[var(--text-muted)] font-mono uppercase tracking-widest pl-2 border-l-2 border-[var(--border-hover)]">TIMELINE_POURS</h3>
                 <div className="space-y-2">
                   {recipeForm.pours.map((pour, idx) => {
-                    const isEnabled = idx === 0 || recipeForm.pours[idx - 1].waterMl > 0;
+                    const isEnabled = idx === 0 || recipeForm.pours[idx - 1].end !== "00:00";
                     const startParts = parseClockParts(pour.start);
                     const endParts = parseClockParts(pour.end);
                     return (
@@ -308,7 +317,7 @@ const RecipeStorage: React.FC = () => {
                         </label>
                         <label className="flex flex-col space-y-1.5">
                           <span className="text-[10px] text-[var(--text-muted)] font-mono uppercase tracking-widest">WATER (ml)</span>
-                          <TacticalNumericInput value={pour.waterMl} onChange={(val) => updateRecipePour(idx, "waterMl", val)} className="w-full bg-[var(--bg-surface)] border border-[var(--border-main)] p-2 text-sm font-mono text-center outline-none" min={0} max={2000} disabled={!isEnabled} />
+                          <TacticalNumericInput value={pour.waterMl} onChange={(val) => updateRecipePour(idx, "waterMl", val)} invalid={Boolean(pourError(pour))} className="w-full bg-[var(--bg-surface)] border border-[var(--border-main)] p-2 text-sm font-mono text-center outline-none" min={0} max={2000} step={1} disabled={!isEnabled} />
                         </label>
                         {recipeForm.useSwitch ? (
                           <label className="flex flex-col space-y-1.5">
@@ -316,10 +325,12 @@ const RecipeStorage: React.FC = () => {
                             <select value={pour.switchState} disabled={!isEnabled} onChange={(e) => updateRecipePour(idx, "switchState", e.target.value)} className="bg-[var(--bg-surface)] border border-[var(--border-main)] p-2 text-xs font-mono outline-none"><option value="닫힘">CLOSED</option><option value="열림">OPEN</option></select>
                           </label>
                         ) : <div className="flex flex-col justify-end pb-2"><span className="text-[10px] text-[var(--text-muted)] font-mono text-center block w-full bg-[var(--bg-surface)] border border-[var(--border-main)] py-2">DISABLED</span></div>}
+                        {pourError(pour) && <p role="alert" className="text-xs text-rose-500 sm:col-span-full">{pourError(pour)}</p>}
                       </div>
                     );
                   })}
                 </div>
+                {validRecipeTimeline(recipeForm.pours) && <p role="alert" className="text-xs text-rose-500">{validRecipeTimeline(recipeForm.pours)}</p>}
                 <div className="grid gap-4 border border-[var(--border-main)] bg-[var(--bg-base)] p-4 sm:grid-cols-2 mt-4">
                   <label className="flex flex-col space-y-1.5">
                     <span className="text-[10px] text-[var(--text-muted)] font-mono uppercase tracking-widest">가수 추천량 (ml)</span>
@@ -348,7 +359,7 @@ const RecipeStorage: React.FC = () => {
             >
               <p className="text-[10px] text-[var(--text-muted)] font-mono tracking-widest pb-2 border-b border-[var(--border-main)]">TOTAL_STORED_RECIPES: {recipes.length}</p>
               {sortedRecipes.length === 0 && <div className="py-12 text-center text-sm font-mono text-[var(--text-sub)] border border-dashed border-[var(--border-main)] bg-[var(--bg-base)]/30">NO_RECIPES_ENCODED</div>}
-              {sortedRecipes.map((item) => (
+              {sortedRecipes.slice(0, visibleCount).map((item) => (
                 <SwipeableRow key={item.id} onDelete={() => removeRecipeInfo(item.id)}>
                   <div className="flex flex-col w-full p-4 sm:p-5 gap-3 bg-[var(--bg-base)] border border-[var(--border-main)] group cursor-pointer" onClick={() => setRecipePreview(JSON.parse(JSON.stringify(item)))}>
                     <div className="flex justify-between items-start gap-4">
@@ -385,6 +396,7 @@ const RecipeStorage: React.FC = () => {
                   </div>
                 </SwipeableRow>
               ))}
+              <LoadMoreButton shown={Math.min(visibleCount, sortedRecipes.length)} total={sortedRecipes.length} onClick={() => setVisibleCount(count => count + 30)} />
             </motion.div>
           )}
         </AnimatePresence>

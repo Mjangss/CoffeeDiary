@@ -1,17 +1,18 @@
-import { useState, useEffect } from "react";
+import { lazy, Suspense, useState, useEffect } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useAppContext } from "./context/AppContext";
 
 // Components
 import NavIcon from "./components/layout/NavIcon";
-import BrewingForm from "./components/features/BrewingForm/BrewingForm";
-import Inventory from "./components/features/Inventory/Inventory";
-import RecipeStorage from "./components/features/RecipeStorage/RecipeStorage";
-import RecordsList from "./components/features/RecordsList/RecordsList";
-import BeanStorage from "./components/features/BeanStorage/BeanStorage";
-import Settings from "./components/features/Settings/Settings";
-import BrewingTimer from "./components/features/BrewingTimer/BrewingTimer";
-import { useFirebase } from "./hooks/useFirebase";
+const BrewingForm = lazy(() => import("./components/features/BrewingForm/BrewingForm"));
+const Inventory = lazy(() => import("./components/features/Inventory/Inventory"));
+const RecipeStorage = lazy(() => import("./components/features/RecipeStorage/RecipeStorage"));
+const RecordsList = lazy(() => import("./components/features/RecordsList/RecordsList"));
+const BeanStorage = lazy(() => import("./components/features/BeanStorage/BeanStorage"));
+const Settings = lazy(() => import("./components/features/Settings/Settings"));
+const GrinderCalibration = lazy(() => import("./components/features/GrinderCalibration/GrinderCalibration"));
+const BrewingTimer = lazy(() => import("./components/features/BrewingTimer/BrewingTimer"));
+import { useFirebaseActions } from "./context/FirebaseContext";
 import LogoDripAnimation from "./components/layout/LogoDripAnimation";
 
 // Types
@@ -29,7 +30,8 @@ const App = () => {
     user,
     cloudStatus,
     cloudStatusVisual,
-    persistedPayload
+    persistedPayload,
+    legacyAvailable
   } = useAppContext();
 
   const [showUpdateAlert, setShowUpdateAlert] = useState(false);
@@ -84,8 +86,8 @@ const App = () => {
     window.location.reload();
   };
 
-  // Start Firebase Boot Sequence
-  const { login, logout, saveToCloud, loadFromCloud } = useFirebase();
+  // Use the shared Firebase session started by FirebaseProvider.
+  const { login, logout, saveToCloud, loadFromCloud } = useFirebaseActions();
 
   if (isAppBooting) {
     return (
@@ -131,6 +133,7 @@ const App = () => {
                   <div className="flex items-center gap-1">
                     <button 
                       onClick={() => saveToCloud(persistedPayload, { withVisual: true })}
+                      aria-label="클라우드에 저장"
                       className="p-1 px-2 text-zinc-500 hover:text-[var(--point-color)] transition-colors border border-zinc-800 group bg-zinc-900/30"
                       title="PUSH_TO_CLOUD"
                     >
@@ -140,6 +143,7 @@ const App = () => {
                     </button>
                     <button 
                       onClick={() => loadFromCloud({ withVisual: true })}
+                      aria-label="클라우드에서 불러오기"
                       className="p-1 px-2 text-zinc-500 hover:text-[var(--point-color)] transition-colors border border-zinc-800 group bg-zinc-900/30"
                       title="PULL_FROM_CLOUD"
                     >
@@ -154,7 +158,7 @@ const App = () => {
                   onClick={login}
                   className="text-[9px] font-mono font-bold text-[var(--point-color)] hover:bg-[var(--point-color)] hover:text-black transition-all border border-[var(--point-color)]/30 px-1.5 py-0.5 uppercase"
                 >
-                  Login
+                  로그인
                 </button>
               )}
               
@@ -169,7 +173,7 @@ const App = () => {
                     'bg-zinc-700'
                   }`}
                 />
-                <span className="text-[9px] font-mono tracking-tight text-[var(--text-muted)] uppercase truncate max-w-[100px] sm:max-w-[200px]">
+                <span title={cloudStatus} className="text-[9px] font-mono tracking-tight text-[var(--text-muted)] uppercase truncate max-w-[100px] sm:max-w-[200px]">
                   {cloudStatus}
                 </span>
               </div>
@@ -182,25 +186,31 @@ const App = () => {
         </div>
       </header>
 
-      <main className="pt-36 sm:pt-32 pb-32">
+      <main key={user?.uid ?? "guest"} className="pt-36 sm:pt-32 pb-32">
+        {legacyAvailable && <div role="status" className="mx-6 mb-5 rounded border border-amber-500/50 bg-amber-500/10 px-4 py-3 text-sm text-amber-300 sm:mx-10">
+          이전 버전의 로컬 데이터가 보관되어 있습니다. <button type="button" onClick={() => setActivePage("settings")} className="underline underline-offset-2">설정에서 가져오기</button>
+        </div>}
+        <Suspense fallback={<div className="mx-6 py-16 text-center text-xs font-mono text-[var(--text-muted)]">LOADING_MODULE...</div>}>
         <AnimatePresence mode="wait">
            {activePage === "coffee-diary" && <BrewingForm key="page-brew" />}
            {activePage === "coffee-diary-records" && <RecordsList key="page-records" />}
            {activePage === "bean-storage" && <BeanStorage key="page-bean" />}
            {activePage === "recipe-storage" && <RecipeStorage key="page-recipe" />}
            {activePage === "inventory" && <Inventory key="page-inventory" />}
+           {activePage === "grinder-calibration" && <GrinderCalibration key="page-calibration" />}
            {activePage === "settings" && <Settings key="page-settings" />}
            {activePage === "brewing-timer" && <BrewingTimer key="page-timer" />}
         </AnimatePresence>
+        </Suspense>
       </main>
 
       {/* 하단 플로팅 내비게이션 도크 */}
-      <div className="fixed inset-x-0 bottom-8 z-50 flex justify-center px-6 pointer-events-none">
+      <div className="fixed inset-x-0 bottom-6 sm:bottom-8 z-50 flex justify-center px-3 sm:px-6 pointer-events-none">
         <motion.nav 
           initial={{ y: 40, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           transition={{ type: "spring", stiffness: 260, damping: 20 }}
-          className="pointer-events-auto flex items-center justify-around gap-1 sm:gap-4 bg-[var(--bg-base)]/80 backdrop-blur-2xl border border-[var(--border-main)]/50 px-3 py-2.5 rounded-[24px] shadow-[0_20px_50px_rgba(0,0,0,0.5)] max-w-full sm:w-auto"
+          className="pointer-events-auto flex items-center justify-around gap-0.5 sm:gap-3 bg-[var(--bg-base)]/80 backdrop-blur-2xl border border-[var(--border-main)]/50 px-2 py-2 sm:px-4 sm:py-2.5 rounded-[20px] sm:rounded-[24px] shadow-[0_20px_50px_rgba(0,0,0,0.5)] max-w-full sm:w-auto"
         >
           {[
             { key: "coffee-diary", label: "기록" },
@@ -208,6 +218,7 @@ const App = () => {
             { key: "bean-storage", label: "원두" },
             { key: "recipe-storage", label: "레시피" },
             { key: "inventory", label: "곶간" },
+            { key: "grinder-calibration", label: "분쇄도" },
             { key: "settings", label: "설정" },
           ].map((item) => {
             const isActive = activePage === item.key;
@@ -216,7 +227,7 @@ const App = () => {
               <button
                 key={item.key}
                 onClick={() => setActivePage(item.key as PageKey)}
-                className="group relative flex flex-col items-center justify-center min-w-[60px] cursor-pointer touch-manipulation"
+                className="group relative flex flex-col items-center justify-center min-w-[42px] sm:min-w-[60px] cursor-pointer touch-manipulation"
               >
                 {isActive && (
                   <motion.div 
@@ -237,12 +248,12 @@ const App = () => {
                 </motion.div>
                 
                 <span 
-                  className={`mt-1 text-[10px] font-medium transition-all duration-300 ${isActive ? "opacity-100" : "opacity-40"}`}
+                  className={`mt-1 text-[8.5px] sm:text-[10px] font-medium transition-all duration-300 whitespace-nowrap tracking-tighter ${isActive ? "opacity-100" : "opacity-40"}`}
                   style={isActive ? { color: 'var(--point-color)' } : {}}
                 >
                   {item.label}
                 </span>
-
+                
                 {isActive && (
                   <motion.div 
                     layoutId="activeDot"

@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useAppContext } from "../../../context/AppContext";
 import { triggerHaptic, HAPTIC_PATTERNS } from "../../../utils/haptics";
 import { parseTimeToSeconds } from "../../../utils";
+import { nextTimerElapsed } from "../../../utils/timer";
 import MechanicalButton from "../../common/MechanicalButton";
 
 const BrewingTimer: React.FC = () => {
@@ -16,9 +17,15 @@ const BrewingTimer: React.FC = () => {
   const [isRunning, setIsRunning] = useState(false);
   const [currentStepIdx, setCurrentStepIdx] = useState(-1); // -1: Ready, >=0: Steps
   const [isFinished, setIsFinished] = useState(false);
+  const [wakeStatus, setWakeStatus] = useState("Screen_Lock_Off");
 
   const startTimeRef = useRef<number | null>(null);
   const requestRef = useRef<number | null>(null);
+  const elapsedRef = useRef(0);
+  const runningRef = useRef(false);
+  const alertedRef = useRef(new Set<string>());
+  const wakeRef = useRef<WakeLockSentinel | null>(null);
+  const wakePendingRef = useRef(false);
 
   // Process recipe pours into steps with absolute times
   const missionSteps = useMemo(() => {
@@ -32,7 +39,7 @@ const BrewingTimer: React.FC = () => {
 
   const totalDurationSec = useMemo(() => {
     if (missionSteps.length === 0) return 0;
-    return Math.max(...missionSteps.map(s => s.endSec));
+    return Math.max(0, ...missionSteps.map(s => Number.isFinite(s.endSec) ? s.endSec : 0));
   }, [missionSteps]);
 
   // Current Mission State
@@ -68,59 +75,123 @@ const BrewingTimer: React.FC = () => {
       setCurrentStepIdx(stepIdx);
     }
 
-    // Countdown alerts (3, 2, 1)
+    // One alert per step and second, even when multiple frames land in the same window.
     if (nextStep) {
       const timeToNext = nextStep.startSec - currentTotalSec;
-      if (timeToNext <= 3.05 && timeToNext >= 2.95) triggerHaptic(HAPTIC_PATTERNS.PRE_STAGE_ALERT);
-      if (timeToNext <= 2.05 && timeToNext >= 1.95) triggerHaptic(HAPTIC_PATTERNS.PRE_STAGE_ALERT);
-      if (timeToNext <= 1.05 && timeToNext >= 0.95) triggerHaptic(HAPTIC_PATTERNS.PRE_STAGE_ALERT);
+      const second = Math.ceil(timeToNext);
+      const alertKey = `${missionSteps.indexOf(nextStep)}:${second}`;
+      if (second >= 1 && second <= 3 && !alertedRef.current.has(alertKey)) {
+        alertedRef.current.add(alertKey);
+        triggerHaptic(HAPTIC_PATTERNS.PRE_STAGE_ALERT);
+      }
     }
+  }, [currentTotalSec, isRunning, missionSteps, currentStepIdx, nextStep]);
 
-    // Finish detection
-    if (currentTotalSec >= totalDurationSec && totalDurationSec > 0) {
-      setIsRunning(false);
+  const releaseWakeLock = () => {
+    const lock = wakeRef.current;
+    wakeRef.current = null;
+    if (lock) void lock.release().catch(() => {});
+    setWakeStatus("Screen_Lock_Off");
+  };
+
+  const requestWakeLock = async () => {
+    if (!("wakeLock" in navigator)) {
+      setWakeStatus("Screen_Lock_Not_Supported");
+      return;
+    }
+    if (wakeRef.current || wakePendingRef.current) return;
+    wakePendingRef.current = true;
+    setWakeStatus("Screen_Lock_Requesting");
+    try {
+      const lock = await navigator.wakeLock.request("screen");
+      if (!runningRef.current) {
+        await lock.release();
+        return;
+      }
+      wakeRef.current = lock;
+      setWakeStatus("Screen_Lock_Active");
+      lock.addEventListener("release", () => {
+        if (wakeRef.current !== lock) return;
+        wakeRef.current = null;
+        setWakeStatus(runningRef.current ? "Screen_Lock_Released" : "Screen_Lock_Off");
+      });
+    } catch {
+      if (runningRef.current) setWakeStatus("Screen_Lock_Unavailable");
+    } finally {
+      wakePendingRef.current = false;
+    }
+  };
+
+  const stopTimer = () => {
+    runningRef.current = false;
+    if (requestRef.current !== null) cancelAnimationFrame(requestRef.current);
+    requestRef.current = null;
+    startTimeRef.current = null;
+    setIsRunning(false);
+    releaseWakeLock();
+  };
+
+  const animate = (time: number) => {
+    if (!runningRef.current) return;
+    if (startTimeRef.current === null) startTimeRef.current = time - elapsedRef.current;
+    const next = nextTimerElapsed(time, startTimeRef.current, totalDurationSec * 1000);
+    elapsedRef.current = next;
+    setElapsedMs(next);
+    if (next >= totalDurationSec * 1000) {
+      stopTimer();
       setIsFinished(true);
       triggerHaptic(HAPTIC_PATTERNS.MISSION_ACCOMPLISHED);
+      return;
     }
-  }, [currentTotalSec, isRunning, missionSteps, currentStepIdx, nextStep, totalDurationSec]);
-
-  // Timer Core
-  const animate = (time: number) => {
-    if (startTimeRef.current === null) startTimeRef.current = time - elapsedMs;
-    const delta = time - startTimeRef.current;
-    setElapsedMs(delta);
     requestRef.current = requestAnimationFrame(animate);
   };
 
   const toggleTimer = () => {
-    if (isRunning) {
-      if (requestRef.current) cancelAnimationFrame(requestRef.current);
-      setIsRunning(false);
-      startTimeRef.current = null;
+    if (isFinished || totalDurationSec <= 0) return;
+    if (runningRef.current) {
+      stopTimer();
       triggerHaptic(HAPTIC_PATTERNS.ABORT_WARNING);
     } else {
+      runningRef.current = true;
+      setIsRunning(true);
+      void requestWakeLock();
       triggerHaptic(HAPTIC_PATTERNS.MISSION_IGNITION);
       requestRef.current = requestAnimationFrame(animate);
-      setIsRunning(true);
     }
   };
 
   const resetTimer = () => {
-    if (requestRef.current) cancelAnimationFrame(requestRef.current);
-    setIsRunning(false);
+    stopTimer();
     setIsFinished(false);
+    elapsedRef.current = 0;
     setElapsedMs(0);
     setCurrentStepIdx(-1);
-    startTimeRef.current = null;
+    alertedRef.current.clear();
     triggerHaptic(HAPTIC_PATTERNS.PRE_STAGE_ALERT);
   };
 
   const abortMission = () => {
-    if (requestRef.current) cancelAnimationFrame(requestRef.current);
+    stopTimer();
     triggerHaptic(HAPTIC_PATTERNS.ABORT_WARNING);
     setActiveRecipeForTimer(null);
     setActivePage("recipe-storage");
   };
+
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === "visible" && runningRef.current) void requestWakeLock();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      runningRef.current = false;
+      if (requestRef.current !== null) cancelAnimationFrame(requestRef.current);
+      requestRef.current = null;
+      const lock = wakeRef.current;
+      wakeRef.current = null;
+      if (lock) void lock.release().catch(() => {});
+    };
+  }, []);
 
   const formatTime = (ms: number) => {
     const totalSec = Math.floor(ms / 1000);
@@ -174,7 +245,7 @@ const BrewingTimer: React.FC = () => {
             <div className="h-2 bg-zinc-900 border border-zinc-800 overflow-hidden relative">
               <motion.div 
                 className="h-full bg-white opacity-20"
-                animate={{ width: `${Math.min(100, (currentTotalSec / totalDurationSec) * 100)}%` }}
+                animate={{ width: `${totalDurationSec > 0 ? Math.min(100, (currentTotalSec / totalDurationSec) * 100) : 0}%` }}
                 transition={{ ease: "linear", duration: 0.1 }}
               />
             </div>
@@ -328,6 +399,7 @@ const BrewingTimer: React.FC = () => {
       <div className="p-8 bg-zinc-950 border-t border-zinc-900 grid grid-cols-[1fr_auto] gap-4 z-20">
         <MechanicalButton 
           onClick={toggleTimer}
+          disabled={isFinished || totalDurationSec <= 0}
           className={`py-5 text-sm font-black uppercase tracking-widest transition-all ${
             isRunning || isFinished ? "bg-zinc-800 text-zinc-100" : "text-black"
           } ${isFinished ? "opacity-80 scale-95" : "scale-100"}`}
@@ -348,8 +420,8 @@ const BrewingTimer: React.FC = () => {
           </MechanicalButton>
         )}
         
-        <p className="col-span-2 text-[9px] text-zinc-600 text-center uppercase tracking-widest animate-pulse mt-2">
-          Tactical_Feedback_Active | Screen_Lock_Engaged
+        <p aria-live="polite" className="col-span-2 text-[9px] text-zinc-600 text-center uppercase tracking-widest mt-2">
+          Tactical_Feedback_Active | {wakeStatus}
         </p>
       </div>
     </motion.div>

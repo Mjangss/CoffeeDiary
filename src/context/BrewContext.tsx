@@ -1,8 +1,8 @@
 import React, { createContext, useContext, useReducer, ReactNode } from "react";
 import { BrewFormState, BrewAction } from "../types";
-import { INITIAL_BREW_FORM, METHOD_CONFIG, DEFAULT_CUP_SCORES } from "../constants";
+import { INITIAL_BREW_FORM, DEFAULT_CUP_SCORES, defaultBaseClick } from "../constants";
 
-const brewFormReducer = (state: BrewFormState, action: BrewAction): BrewFormState => {
+export const brewFormReducer = (state: BrewFormState, action: BrewAction): BrewFormState => {
   switch (action.type) {
     case "UPDATE_FIELD":
       return { ...state, [action.field]: action.value };
@@ -11,14 +11,10 @@ const brewFormReducer = (state: BrewFormState, action: BrewAction): BrewFormStat
       return { ...state, cupScores: { ...state.cupScores, ...action.scores } };
 
     case "RESET_FORM":
-      return { 
-        ...INITIAL_BREW_FORM, 
-        baseClick: METHOD_CONFIG[INITIAL_BREW_FORM.method].baselineClick,
-        baseClickInput: METHOD_CONFIG[INITIAL_BREW_FORM.method].baselineClick.toFixed(1)
-      };
+      return { ...INITIAL_BREW_FORM };
 
     case "SET_METHOD": {
-      const newBaseline = METHOD_CONFIG[action.method].baselineClick;
+      const newBaseline = defaultBaseClick(action.method, state.grinder);
       return { 
         ...state, 
         method: action.method, 
@@ -33,11 +29,11 @@ const brewFormReducer = (state: BrewFormState, action: BrewAction): BrewFormStat
 
     case "LOAD_RECORD": {
       const { record, recipes } = action;
-      const linkedRecipe = recipes.find(r => r.name === record.recipe);
+      const linkedRecipe = recipes.find(recipe => recipe.id === record.recipeId);
       return {
         ...state,
         bean: record.bean || "",
-        selectedBeanName: record.bean || "",
+        selectedBeanId: record.beanId || "",
         method: record.method || "Brew",
         grinder: record.grinder || "Millab M01",
         brewWater: record.brewWater || "평창수",
@@ -54,9 +50,11 @@ const brewFormReducer = (state: BrewFormState, action: BrewAction): BrewFormStat
         baseClickInput: record.baseClick.toFixed(1),
         memo: record.memo ?? "",
         selectedInventoryId: record.inventoryId || "",
-        selectedRecipeId: linkedRecipe?.id || "",
-        recipe: record.recipe || "",
-        dose: record.dose || 20,
+        selectedRecipeId: linkedRecipe?.id ?? record.recipeId ?? "",
+        recipe: record.recipeSnapshot?.name ?? record.recipe ?? "",
+        dose: record.recipeSnapshot?.dose ?? record.dose ?? 20,
+        oxoUpperFilter: record.oxoUpperFilter ?? "종이",
+        oxoLowerFilter: record.oxoLowerFilter ?? "종이",
       };
     }
 
@@ -65,6 +63,10 @@ const brewFormReducer = (state: BrewFormState, action: BrewAction): BrewFormStat
         ...state,
         selectedRecipeId: action.recipe.id,
         recipe: action.recipe.name,
+        method: action.recipe.method,
+        switchApplied: action.recipe.method === "Brew" && action.recipe.useSwitch,
+        oxoUpperFilter: action.recipe.oxoUpperFilter ?? "종이",
+        oxoLowerFilter: action.recipe.oxoLowerFilter ?? "종이",
         dose: action.recipe.dose
       };
 

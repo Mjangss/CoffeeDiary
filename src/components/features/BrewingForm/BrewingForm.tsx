@@ -1,4 +1,4 @@
-import React, { useMemo, useEffect } from "react";
+import React, { useMemo, useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAppContext } from "../../../context/AppContext";
 import { useBrewContext } from "../../../context/BrewContext";
@@ -8,7 +8,6 @@ import {
   BrewWater, 
   Dripper, 
   RoastLevel, 
-  InventoryStatus, 
   BrewRecord,
   OXOFilterType
 } from "../../../types";
@@ -24,11 +23,13 @@ import {
   round, 
   parseTypedNumber, 
   keyOf, 
-  calcRestDays, 
+  calcInventoryRestDays,
   getTransitionVariants
 } from "../../../utils";
 import MechanicalButton from "../../common/MechanicalButton";
 import TacticalNumericInput from "../../common/TacticalNumericInput";
+import { validMeasure, validStockOutflow } from "../../../utils/validation";
+import { saveBrewRecord } from "../../../lib/recordLedger";
 import RadarChart from "../../common/RadarChart";
 
 const BrewingForm: React.FC = () => {
@@ -37,9 +38,7 @@ const BrewingForm: React.FC = () => {
     beans,
     recipes,
     settings,
-    setRecords,
-    setInventory,
-    setProfiles,
+    replacePersistedPayload,
     editingRecordId,
     setEditingRecordId,
     records,
@@ -47,6 +46,8 @@ const BrewingForm: React.FC = () => {
   } = useAppContext();
 
   const { brewForm, dispatch } = useBrewContext();
+  const [ledgerError, setLedgerError] = useState("");
+  const lastRecommendationSelection = useRef<{ recordId: string | null; key: string } | null>(null);
 
   // --- Derived State & Handlers ---
   const sortedRecipes = useMemo(() => {
@@ -54,8 +55,8 @@ const BrewingForm: React.FC = () => {
   }, [recipes]);
 
   const selectedBeanInfo = useMemo(() => 
-    beans.find((item) => item.name === brewForm.selectedBeanName) ?? null, 
-  [beans, brewForm.selectedBeanName]);
+    beans.find((item) => item.id === brewForm.selectedBeanId) ?? null,
+  [beans, brewForm.selectedBeanId]);
 
   const selectedRecipeInfo = useMemo(() => 
     recipes.find((item) => item.id === brewForm.selectedRecipeId) ?? null, 
@@ -66,20 +67,39 @@ const BrewingForm: React.FC = () => {
     [brewForm.cupScores],
   );
 
-  const canSaveRecord = brewForm.selectedBeanName.trim().length > 0 && brewForm.bean.trim().length > 0;
+  const beanReady = brewForm.bean.trim().length > 0;
+  const originalRecord = editingRecordId ? records.find(record => record.id === editingRecordId) : undefined;
+  const selectedInventory = inventory.find(item => item.id === brewForm.selectedInventoryId);
+  const oldInventory = inventory.find(item => item.id === originalRecord?.inventoryId);
+  const stockChanged = !originalRecord || originalRecord.inventoryId !== (brewForm.selectedInventoryId || undefined) || originalRecord.dose !== brewForm.dose;
+  const availableStock = selectedInventory ? selectedInventory.remainingWeight + (oldInventory?.id === selectedInventory.id ? originalRecord?.dose ?? 0 : 0) : 0;
+  const doseError = !validMeasure(brewForm.dose, 1, 100, 0.1) ? "사용량은 1~100g, 0.1g 단위여야 합니다."
+    : stockChanged && originalRecord?.inventoryId && !oldInventory ? "기존 재고를 찾을 수 없어 정정할 수 없습니다."
+    : brewForm.selectedInventoryId && !selectedInventory ? "선택한 재고를 찾을 수 없습니다."
+    : stockChanged && selectedInventory && !validStockOutflow(brewForm.dose, availableStock) ? "사용량이 재고 잔량을 초과합니다." : "";
+  const brewSecError = validMeasure(brewForm.brewSec, 20, 900, 1) ? "" : "추출시간은 20~900초의 정수여야 합니다.";
+  const baseClickToSave = parseTypedNumber(brewForm.baseClickInput) ?? brewForm.baseClick;
+  const grinderRange = settings.grinders[brewForm.grinder] ?? { min: 0.1, max: 20, step: 0.1 };
+  const originalClickUnchanged = originalRecord?.grinder === brewForm.grinder && originalRecord.baseClick === baseClickToSave;
+  const baseClickError = validMeasure(baseClickToSave, grinderRange.min, grinderRange.max, grinderRange.step) || originalClickUnchanged
+    ? "" : "분쇄도는 장비의 범위와 간격에 맞아야 합니다.";
+  const canSaveRecord = beanReady && !doseError && !brewSecError && !baseClickError;
 
   const applyBaseClick = (value: number) => {
     const range = settings.grinders[brewForm.grinder] || { min: 0.1, max: 20.0, step: 0.1 };
     const normalized = round(Number.isFinite(value) ? value : METHOD_CONFIG[brewForm.method].baselineClick, 1);
-    const clamped = clamp(normalized, range.min, range.max);
+    const stepped = range.step > 0 ? range.min + Math.round((normalized - range.min) / range.step) * range.step : normalized;
+    const clamped = clamp(round(stepped, 1), range.min, range.max);
     dispatch({ type: "SET_BASE_CLICK", value: clamped });
   };
 
   const loadInventoryToParams = (id: string) => {
+    setLedgerError("");
     dispatch({ type: "UPDATE_FIELD", field: "selectedInventoryId", value: id });
     if (!id) {
        dispatch({ type: "SET_METHOD", method: "Brew" });
-       dispatch({ type: "UPDATE_FIELD", field: "bean", value: "" });
+      dispatch({ type: "UPDATE_FIELD", field: "bean", value: "" });
+      dispatch({ type: "UPDATE_FIELD", field: "selectedBeanId", value: "" });
        dispatch({ type: "UPDATE_FIELD", field: "roastLevel", value: "중배전" });
        dispatch({ type: "UPDATE_FIELD", field: "restDays", value: 0 });
        return;
@@ -88,15 +108,15 @@ const BrewingForm: React.FC = () => {
     if (!inv) return;
     
     dispatch({ type: "UPDATE_FIELD", field: "bean", value: inv.beanName });
-    dispatch({ type: "UPDATE_FIELD", field: "selectedBeanName", value: inv.beanName });
+    dispatch({ type: "UPDATE_FIELD", field: "selectedBeanId", value: inv.beanId ?? "" });
     
-    const foundBean = beans.find(b => b.name === inv.beanName);
+    const foundBean = beans.find(bean => bean.id === inv.beanId);
     if (foundBean) {
       dispatch({ type: "UPDATE_FIELD", field: "roastLevel", value: foundBean.roastLevel });
     }
 
     if (inv.roastDate) {
-      dispatch({ type: "UPDATE_FIELD", field: "restDays", value: calcRestDays(inv.roastDate) });
+      dispatch({ type: "UPDATE_FIELD", field: "restDays", value: calcInventoryRestDays(inv) });
     }
   };
 
@@ -121,127 +141,71 @@ const BrewingForm: React.FC = () => {
 
   const saveRecord = () => {
     if (!canSaveRecord) return;
-    const parsedBaseClick = parseTypedNumber(brewForm.baseClickInput);
-    const sanitizedBaseClick = parsedBaseClick === null ? brewForm.baseClick : round(parsedBaseClick, 1);
-    const sanitizedBrewSec = brewForm.brewSec > 0 ? clamp(Math.round(brewForm.brewSec), 20, 900) : 31;
-    
-    if (editingRecordId) {
-      const originalRecord = records.find(r => r.id === editingRecordId);
-      if (!originalRecord) {
-        setEditingRecordId(null);
-        return;
-      }
-
-      setRecords(prev => prev.map(r => {
-        if (r.id !== editingRecordId) return r;
-        return {
-          ...r,
-          bean: brewForm.bean.trim(),
-          method: brewForm.method,
-          grinder: brewForm.grinder,
-          brewWater: brewForm.brewWater,
-          brewWaterTemp: brewForm.brewWaterTemp,
-          immersionWaterTemp: brewForm.method === "Brew" && brewForm.switchApplied ? brewForm.immersionWaterTemp : null,
-          dripper: brewForm.dripper,
-          filterPaper: brewForm.filterPaper,
-          switchApplied: brewForm.switchApplied,
-          roastLevel: brewForm.roastLevel,
-          scoreAverage: averageCupScore,
-          cupScores: brewForm.cupScores,
-          restDays: brewForm.restDays,
-          brewSec: sanitizedBrewSec,
-          recipe: selectedRecipeInfo?.name ?? (brewForm.recipe || ""),
-          baseClick: sanitizedBaseClick,
-          memo: brewForm.memo.trim(),
-          dose: brewForm.dose,
-          oxoUpperFilter: brewForm.method === "OXO" ? brewForm.oxoUpperFilter : undefined,
-          oxoLowerFilter: brewForm.method === "OXO" ? brewForm.oxoLowerFilter : undefined,
-        };
-      }));
-      setEditingRecordId(null);
-    } else {
-      const next: BrewRecord = {
-        id: crypto.randomUUID(),
-        createdAt: new Date().toISOString(),
-        bean: brewForm.bean.trim(),
-        method: brewForm.method,
-        grinder: brewForm.grinder,
-        brewWater: brewForm.brewWater,
-        brewWaterTemp: brewForm.brewWaterTemp,
-        immersionWaterTemp: brewForm.method === "Brew" && brewForm.switchApplied ? brewForm.immersionWaterTemp : null,
-        dripper: brewForm.dripper,
-        filterPaper: brewForm.filterPaper,
-        switchApplied: brewForm.switchApplied,
-        roastLevel: brewForm.roastLevel,
-        scoreAverage: averageCupScore,
-        cupScores: brewForm.cupScores,
-        restDays: brewForm.restDays,
-        brewSec: sanitizedBrewSec,
-        recipe: selectedRecipeInfo?.name ?? (brewForm.recipe || ""),
-        baseClick: sanitizedBaseClick,
-        memo: brewForm.memo.trim(),
-        inventoryId: brewForm.selectedInventoryId || undefined,
-        dose: brewForm.dose,
-        oxoUpperFilter: brewForm.method === "OXO" ? brewForm.oxoUpperFilter : undefined,
-        oxoLowerFilter: brewForm.method === "OXO" ? brewForm.oxoLowerFilter : undefined,
-      };
-      setRecords((prev) => [next, ...prev]);
-
-      if (brewForm.selectedInventoryId) {
-        setInventory(prev => prev.map(inv => {
-          if (inv.id === brewForm.selectedInventoryId) {
-            const newWeight = Math.max(0, inv.remainingWeight - brewForm.dose);
-            const newLogs = inv.manualLogs ? [...inv.manualLogs] : [];
-            newLogs.push({
-              date: new Date().toISOString(),
-              amount: brewForm.dose,
-              type: "DEC",
-              reason: "추출에 의한 자동 차감"
-            });
-            return { 
-              ...inv, 
-              remainingWeight: newWeight, 
-              status: newWeight === 0 ? ("DEPLETED" as InventoryStatus) : inv.status,
-              manualLogs: newLogs
-            };
-          }
-          return inv;
-        }));
-      }
-
-      const k = keyOf(next.bean, next.method, next.grinder, next.dripper, next.switchApplied);
-      setProfiles((prev) => {
-        const old = prev[k];
-        const origin = old?.baseClick ?? METHOD_CONFIG[next.method].baselineClick;
-        const sampleCount = old?.sampleCount ?? 0;
-        const updatedBase = round((origin * sampleCount + next.baseClick) / (sampleCount + 1));
-        return {
-          ...prev,
-          [k]: {
-            bean: next.bean,
-            method: next.method,
-            grinder: next.grinder,
-            dripper: next.dripper,
-            switchApplied: next.switchApplied,
-            baseClick: updatedBase,
-            sampleCount: sampleCount + 1,
-            updatedAt: next.createdAt,
-          },
-        };
-      });
+    if (editingRecordId && !originalRecord) {
+      setLedgerError("수정할 기록을 찾을 수 없습니다.");
+      return;
+    }
+    const existingSnapshot = originalRecord?.recipeId === selectedRecipeInfo?.id
+      ? originalRecord?.recipeSnapshot : undefined;
+    const recipeSnapshot = existingSnapshot ?? (selectedRecipeInfo ? {
+          name: selectedRecipeInfo.name, method: selectedRecipeInfo.method, drinkType: selectedRecipeInfo.drinkType,
+          dose: selectedRecipeInfo.dose, useSwitch: selectedRecipeInfo.useSwitch,
+          pours: selectedRecipeInfo.pours.map(pour => ({ ...pour })), dilutionGuide: selectedRecipeInfo.dilutionGuide,
+          oxoUpperFilter: selectedRecipeInfo.oxoUpperFilter, oxoLowerFilter: selectedRecipeInfo.oxoLowerFilter,
+        } : undefined);
+    const next: BrewRecord = {
+      ...originalRecord,
+      id: originalRecord?.id ?? crypto.randomUUID(),
+      createdAt: originalRecord?.createdAt ?? new Date().toISOString(),
+      bean: brewForm.bean.trim(),
+      beanId: brewForm.selectedBeanId || undefined,
+      method: brewForm.method,
+      grinder: brewForm.grinder,
+      brewWater: brewForm.brewWater,
+      brewWaterTemp: brewForm.brewWaterTemp,
+      immersionWaterTemp: brewForm.method === "Brew" && brewForm.switchApplied ? brewForm.immersionWaterTemp : null,
+      dripper: brewForm.dripper,
+      filterPaper: brewForm.filterPaper,
+      switchApplied: brewForm.switchApplied,
+      roastLevel: brewForm.roastLevel,
+      scoreAverage: averageCupScore,
+      cupScores: brewForm.cupScores,
+      restDays: brewForm.restDays,
+      brewSec: brewForm.brewSec,
+      recipe: recipeSnapshot?.name ?? (brewForm.recipe || ""),
+      recipeId: selectedRecipeInfo?.id,
+      recipeSnapshot,
+      baseClick: baseClickToSave,
+      memo: brewForm.memo.trim(),
+      inventoryId: brewForm.selectedInventoryId || undefined,
+      dose: brewForm.dose,
+      oxoUpperFilter: brewForm.method === "OXO" ? brewForm.oxoUpperFilter : undefined,
+      oxoLowerFilter: brewForm.method === "OXO" ? brewForm.oxoLowerFilter : undefined,
+    };
+    try {
+      replacePersistedPayload(saveBrewRecord(persistedPayload, next));
+      setLedgerError("");
+    } catch (error) {
+      setLedgerError(error instanceof Error ? error.message : "기록을 저장하지 못했습니다.");
+      return;
     }
 
+    setEditingRecordId(null);
     dispatch({ type: "UPDATE_FIELD", field: "memo", value: "" });
     resetAll();
   };
 
   // --- Effects ---
   useEffect(() => {
+    const selection = keyOf(brewForm.selectedBeanId || brewForm.bean, brewForm.method, brewForm.grinder, brewForm.dripper, brewForm.switchApplied);
+    const previous = lastRecommendationSelection.current;
+    lastRecommendationSelection.current = { recordId: editingRecordId, key: selection };
+    if (editingRecordId && (previous?.recordId !== editingRecordId || previous.key === selection)) return;
     const config = METHOD_CONFIG[brewForm.method];
     const profile = settings.grinders[brewForm.grinder] ? 
-      persistedPayload.profiles[keyOf(brewForm.bean, brewForm.method, brewForm.grinder, brewForm.dripper, brewForm.switchApplied)] : undefined;
+      persistedPayload.profiles[selection] : undefined;
     applyBaseClick(profile?.baseClick ?? config.baselineClick);
-  }, [brewForm.bean, brewForm.method, brewForm.grinder, brewForm.dripper, brewForm.switchApplied]);
+  }, [editingRecordId, brewForm.bean, brewForm.selectedBeanId, brewForm.method, brewForm.grinder, brewForm.dripper, brewForm.switchApplied]);
 
   // --- Render ---
   return (
@@ -456,6 +420,7 @@ const BrewingForm: React.FC = () => {
             <span className="text-[10px] text-[var(--text-sub)] font-mono w-6 text-right">{(settings.grinders[brewForm.grinder] || {min:0.1}).min}</span>
             <input
               type="range"
+              aria-invalid={Boolean(baseClickError)}
               min={(settings.grinders[brewForm.grinder] || {min:0.1}).min}
               max={(settings.grinders[brewForm.grinder] || {max:20.0}).max}
               step={(settings.grinders[brewForm.grinder] || {step:0.1}).step}
@@ -466,6 +431,7 @@ const BrewingForm: React.FC = () => {
             />
             <span className="text-[10px] text-[var(--text-sub)] font-mono w-6">{(settings.grinders[brewForm.grinder] || {max:20.0}).max}</span>
           </div>
+          {baseClickError && <p role="alert" className="text-xs text-rose-500">{baseClickError}</p>}
         </label>
         <label className="flex flex-col space-y-1.5 sm:col-span-2">
           <span className="text-[10px] text-[var(--text-muted)] font-mono uppercase tracking-widest">레시피 (PROTOCOL)</span>
@@ -488,12 +454,17 @@ const BrewingForm: React.FC = () => {
           <div className="relative">
             <TacticalNumericInput
               value={brewForm.dose}
-              onChange={(val) => dispatch({ type: "UPDATE_FIELD", field: "dose", value: val })}
+              onChange={(val) => { setLedgerError(""); dispatch({ type: "UPDATE_FIELD", field: "dose", value: val }); }}
+              invalid={Boolean(doseError)}
               className="w-full bg-[var(--bg-surface)] border border-[var(--border-main)] p-3 pr-10 text-sm focus:border-[var(--point-color)] outline-none rounded-none text-[var(--text-strong)] font-medium font-mono"
               min={1}
+              max={100}
+              step={0.1}
             />
             <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-mono text-[var(--text-muted)]">G</span>
           </div>
+          {doseError && <p role="alert" className="text-xs text-rose-500">{doseError}</p>}
+          {ledgerError && <p role="alert" className="text-xs text-rose-500">{ledgerError}</p>}
         </label>
         <label className="flex flex-col space-y-1.5">
           <span className="text-[10px] text-[var(--text-muted)] font-mono uppercase tracking-widest">실측 추출시간(초)</span>
@@ -501,15 +472,14 @@ const BrewingForm: React.FC = () => {
             <TacticalNumericInput
               value={brewForm.brewSec}
               onChange={(val) => dispatch({ type: "UPDATE_FIELD", field: "brewSec", value: val })}
-              onBlur={() => {
-                if (brewForm.brewSec > 0) dispatch({ type: "UPDATE_FIELD", field: "brewSec", value: clamp(Math.round(brewForm.brewSec), 20, 900) });
-              }}
+              invalid={Boolean(brewSecError)}
               className="w-full bg-[var(--bg-surface)] border border-[var(--border-main)] p-3 pr-10 text-sm focus:border-[var(--point-color)] outline-none rounded-none text-[var(--text-strong)] font-medium font-mono"
               min={20}
               max={900}
             />
             <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-mono text-[var(--text-muted)]">SEC</span>
           </div>
+          {brewSecError && <p role="alert" className="text-xs text-rose-500">{brewSecError}</p>}
         </label>
       </div>
 
@@ -577,7 +547,7 @@ const BrewingForm: React.FC = () => {
           </MechanicalButton>
         </div>
         
-        {!canSaveRecord && (
+        {!beanReady && (
           <p className="sm:col-span-4 text-[10px] font-mono animate-pulse uppercase" style={{ color: 'var(--point-color)' }}>REQUIRED: 원두 정보 누락</p>
         )}
       </div>

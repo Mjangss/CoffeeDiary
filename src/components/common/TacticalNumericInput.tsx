@@ -11,6 +11,7 @@ interface TacticalNumericInputProps {
   max?: number;
   step?: number | string;
   disabled?: boolean;
+  invalid?: boolean;
 }
 
 const TacticalNumericInput: React.FC<TacticalNumericInputProps> = ({ 
@@ -23,7 +24,8 @@ const TacticalNumericInput: React.FC<TacticalNumericInputProps> = ({
   min, 
   max, 
   step, 
-  disabled 
+  disabled,
+  invalid
 }) => (
   <input
     type="number"
@@ -48,6 +50,7 @@ const TacticalNumericInput: React.FC<TacticalNumericInputProps> = ({
     max={max}
     step={step}
     disabled={disabled}
+    aria-invalid={invalid || undefined}
   />
 );
 

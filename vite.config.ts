@@ -3,7 +3,6 @@ import { fileURLToPath } from "url";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
-import { viteSingleFile } from "vite-plugin-singlefile";
 import fs from "node:fs";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -16,7 +15,6 @@ export default defineConfig({
   plugins: [
     react(), 
     tailwindcss(), 
-    viteSingleFile(),
     {
       name: 'generate-version-json',
       closeBundle() {
