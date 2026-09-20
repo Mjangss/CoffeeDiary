@@ -52,7 +52,7 @@ export const brewFormReducer = (state: BrewFormState, action: BrewAction): BrewF
         selectedInventoryId: record.inventoryId || "",
         selectedRecipeId: linkedRecipe?.id ?? record.recipeId ?? "",
         recipe: record.recipeSnapshot?.name ?? record.recipe ?? "",
-        dose: record.recipeSnapshot?.dose ?? record.dose ?? 20,
+        dose: record.dose ?? record.recipeSnapshot?.dose ?? 20,
         oxoUpperFilter: record.oxoUpperFilter ?? "종이",
         oxoLowerFilter: record.oxoLowerFilter ?? "종이",
       };
