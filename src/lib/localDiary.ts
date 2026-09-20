@@ -1,6 +1,7 @@
 import { DATA_SCHEMA_VERSION, DEFAULT_SETTINGS, STORAGE_KEY } from "../constants";
 import type { PersistedPayload } from "../types";
 import { hydratePersistedData } from "../utils/hydration";
+import { validRecipeTimeline } from "../utils/validation";
 
 export const localDiaryKey = (uid: string | null) => `${STORAGE_KEY}:${uid ? `user:${uid}` : "guest"}`;
 export const legacyImportedKey = (uid: string | null) => `${STORAGE_KEY}:legacy-imported:${uid ?? "guest"}`;
@@ -14,6 +15,35 @@ export const emptyDiary = (): PersistedPayload => ({
 
 const object = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === "object" && !Array.isArray(value);
+
+const finite = (value: unknown) => typeof value === "number" && Number.isFinite(value);
+const nonEmptyString = (value: unknown) => typeof value === "string" && value.length > 0;
+const oneOf = (values: readonly string[], value: unknown) => typeof value === "string" && values.includes(value);
+const uniqueIds = (items: unknown[]) => {
+  const ids = items.map(item => object(item) ? item.id : undefined);
+  return ids.every(nonEmptyString) && new Set(ids).size === ids.length;
+};
+
+const validCurrentPayload = (data: Record<string, unknown>) => {
+  const records = data.records as unknown[];
+  const beans = data.beans as unknown[];
+  const inventory = data.inventory as unknown[];
+  const recipes = data.recipes as unknown[];
+  const validPour = (pour: unknown) => object(pour) && nonEmptyString(pour.start) && nonEmptyString(pour.end) && finite(pour.order) && finite(pour.waterMl);
+  const validTimeline = (pours: unknown[]) => pours.every(validPour) && validRecipeTimeline(pours as Array<{ start: string; end: string; waterMl: number }>) === "";
+  const validScores = (scores: unknown) => object(scores) && Object.values(scores).every(finite);
+  const validSnapshot = (snapshot: unknown) => !snapshot || (object(snapshot) && nonEmptyString(snapshot.name) && finite(snapshot.dose) && Array.isArray(snapshot.pours) && validTimeline(snapshot.pours));
+  return [records, beans, inventory, recipes].every(Array.isArray) &&
+    [records, beans, inventory, recipes].every(uniqueIds) &&
+    records.every(item => object(item) && nonEmptyString(item.bean) && oneOf(["Brew", "Espresso", "OXO"], item.method) && nonEmptyString(item.grinder) &&
+      finite(item.brewWaterTemp) && finite(item.scoreAverage) && finite(item.restDays) && finite(item.brewSec) && finite(item.baseClick) &&
+      finite(item.dose) && validScores(item.cupScores) && validSnapshot(item.recipeSnapshot)) &&
+    beans.every(item => object(item) && nonEmptyString(item.name) && nonEmptyString(item.createdAt)) &&
+    inventory.every(item => object(item) && nonEmptyString(item.beanName) && finite(item.initialWeight) && finite(item.remainingWeight) &&
+      oneOf(["RESTING", "ACTIVE", "FROZEN", "DEPLETED"], item.status) && nonEmptyString(item.createdAt) && (item.manualLogs === undefined || Array.isArray(item.manualLogs))) &&
+    recipes.every(item => object(item) && nonEmptyString(item.name) && oneOf(["Brew", "Espresso", "OXO"], item.method) &&
+      oneOf(["hot", "ice"], item.drinkType) && finite(item.dose) && Array.isArray(item.pours) && validTimeline(item.pours));
+};
 
 export const parseAndMigratePayload = (value: unknown): PersistedPayload => {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Invalid diary data");
@@ -49,6 +79,7 @@ export const parseAndMigratePayload = (value: unknown): PersistedPayload => {
         item.manualLogs !== undefined && (!Array.isArray(item.manualLogs) || !item.manualLogs.every(object))))) {
     throw new Error("Invalid diary data");
   }
+  if (data.schemaVersion === DATA_SCHEMA_VERSION && !validCurrentPayload(data)) throw new Error("Invalid diary data");
   return {
     ...emptyDiary(),
     ...hydratePersistedData(data),

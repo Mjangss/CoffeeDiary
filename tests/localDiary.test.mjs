@@ -41,6 +41,16 @@ test("malformed account data is rejected before it can replace another account",
   assert.throws(() => parseAndMigratePayload({ recipes: [{ pours: [null] }] }));
 });
 
+test("current data validates record fields and collection IDs", () => {
+  const current = parseAndMigratePayload({ records: [{ id: "record", bean: "bean" }] });
+  const serialized = JSON.parse(serializeDiary(current));
+  assert.throws(() => parseAndMigratePayload({ ...serialized, records: [{}] }));
+  assert.throws(() => parseAndMigratePayload({ ...serialized, records: [{ ...serialized.records[0], dose: "30" }] }));
+  assert.throws(() => parseAndMigratePayload({ ...serialized, inventory: [{ ...serialized.inventory[0], remainingWeight: -1 }] }));
+  assert.throws(() => parseAndMigratePayload({ ...serialized, recipes: [{ ...serialized.recipes[0], pours: [{ start: "01:00", end: "00:30", waterMl: 10 }] }] }));
+  assert.throws(() => parseAndMigratePayload({ ...serialized, beans: [serialized.beans[0], serialized.beans[0]] }));
+});
+
 test("backup and cloud data use the same migration", () => {
   const legacy = { records: [{ id: "old", method: "OXO", scoreAverage: 6.3 }], settings: { theme: { pointColor: "#123456" } } };
   const local = parseDiary(JSON.stringify(legacy));
