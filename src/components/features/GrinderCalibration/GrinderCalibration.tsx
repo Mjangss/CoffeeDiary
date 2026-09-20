@@ -72,7 +72,7 @@ const GrinderCalibration: React.FC = () => {
           <h3 className="text-[11px] font-bold text-[var(--point-color)] tracking-widest uppercase mb-4">기준 클릭</h3>
           <label className="block text-[10px] text-[var(--text-muted)] mb-2">{baseRange.min} ~ {baseRange.max}</label>
           <input type="range" min={baseRange.min} max={baseRange.max} step={baseRange.step} value={baseClick} onChange={event => setBaseClick(Number(event.target.value))} className="w-full accent-[var(--point-color)]" />
-          <div className="mt-4 flex justify-between items-end"><span className="text-2xl font-black text-[var(--text-strong)]">{baseClick.toFixed(precision)}</span><span className={`text-sm font-bold ${baseResult ? sourceStyle[baseResult.source] : sourceStyle.missing}`}>{baseResult ? `~ ${Math.round(baseResult.um)} μm` : "입도 입력 필요"}</span></div>
+          <div className="mt-4 flex justify-between items-end"><span className="text-2xl font-black text-[var(--text-strong)]">{baseClick.toFixed(precision)}</span><span className={`text-sm font-bold ${baseResult ? sourceStyle[baseResult.source] : sourceStyle.missing}`}>{baseResult ? `~ ${Math.round(baseResult.um)} μm${baseResult.extrapolated ? " · 외삽" : ""}` : "입도 입력 필요"}</span></div>
           <div className="mt-6 border-t border-[var(--border-main)] pt-4 space-y-3">
             <p className="text-[10px] text-[var(--text-muted)] uppercase">환산 결과</p>
             {grinders.filter(grinder => grinder !== baseGrinder).map(grinder => {
@@ -91,7 +91,7 @@ const GrinderCalibration: React.FC = () => {
               return <div key={key} className="grid grid-cols-[5rem_1fr_5.5rem] items-center gap-3 p-3 text-xs">
                 <span className="text-[var(--text-muted)]">{click.toFixed(precision)} click</span>
                 <input type="number" min="0" step="1" value={direct ?? ""} placeholder={result ? String(Math.round(result.um)) : "입력 필요"} onChange={event => setDirectMicrons(click, event.target.value)} aria-label={`${click.toFixed(precision)} 클릭의 직접 입력 입도`} className={`w-full bg-[var(--bg-base)] border border-[var(--border-main)] p-2 outline-none focus:border-[var(--point-color)] ${direct ? sourceStyle.user : "text-[var(--text-main)]"}`} />
-                <span className={`text-right ${result ? sourceStyle[result.source] : sourceStyle.missing}`}>{result ? `${Math.round(result.um)} μm` : "입력 필요"}</span>
+                <span className={`text-right ${result ? sourceStyle[result.source] : sourceStyle.missing}`}>{result ? `${Math.round(result.um)} μm${result.extrapolated ? " · 외삽" : ""}` : "입력 필요"}</span>
               </div>;
             })}
           </div>

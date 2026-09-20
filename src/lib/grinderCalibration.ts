@@ -1,7 +1,7 @@
 import { GRINDER_RANGE } from "../constants";
 
 export type CalibrationSource = "user" | "estimated" | "default" | "missing";
-export type CalibrationResult = { um: number; source: CalibrationSource } | null;
+export type CalibrationResult = { um: number; source: CalibrationSource; extrapolated?: boolean } | null;
 type Point = { click: number; um: number };
 type Range = { min: number; max: number; step: number };
 
@@ -23,17 +23,17 @@ const keyFor = (click: number) => String(Number(click.toFixed(6)));
 
 const interpolate = (click: number, points: Point[]) => {
   const sorted = [...points].sort((a, b) => a.click - b.click);
-  if (sorted.length < 2) return null;
+  if (sorted.length < 2 || !Number.isFinite(click)) return null;
   const upper = sorted.findIndex(point => point.click >= click);
-  const [left, right] = upper <= 0 ? [sorted[0], sorted[1]] : upper === -1 ? [sorted.at(-2)!, sorted.at(-1)!] : [sorted[upper - 1], sorted[upper]];
+  const [left, right] = upper === -1 ? [sorted.at(-2)!, sorted.at(-1)!] : upper <= 0 ? [sorted[0], sorted[1]] : [sorted[upper - 1], sorted[upper]];
   return left.um + ((right.um - left.um) * (click - left.click)) / (right.click - left.click);
 };
 
 const inverse = (um: number, points: Point[]) => {
   const sorted = [...points].sort((a, b) => a.click - b.click);
-  if (sorted.length < 2 || sorted.some((point, index) => index && point.um <= sorted[index - 1].um)) return null;
+  if (sorted.length < 2 || !Number.isFinite(um) || sorted.some((point, index) => index && point.um <= sorted[index - 1].um)) return null;
   const upper = sorted.findIndex(point => point.um >= um);
-  const [left, right] = upper <= 0 ? [sorted[0], sorted[1]] : upper === -1 ? [sorted.at(-2)!, sorted.at(-1)!] : [sorted[upper - 1], sorted[upper]];
+  const [left, right] = upper === -1 ? [sorted.at(-2)!, sorted.at(-1)!] : upper <= 0 ? [sorted[0], sorted[1]] : [sorted[upper - 1], sorted[upper]];
   return left.click + ((right.click - left.click) * (um - left.um)) / (right.um - left.um);
 };
 
@@ -55,7 +55,10 @@ export const micronsForClick = (grinder: string, click: number, calibrations: Re
   const points = directPoints(calibrations, grinder);
   const direct = points.find(point => keyFor(point.click) === keyFor(click));
   if (direct) return { um: direct.um, source: "user" };
-  if (points.length >= 2) return { um: interpolate(click, points)!, source: "estimated" };
+  if (points.length >= 2) {
+    const clicks = points.map(point => point.click);
+    return { um: interpolate(click, points)!, source: "estimated", ...(click < Math.min(...clicks) || click > Math.max(...clicks) ? { extrapolated: true } : {}) };
+  }
   const um = defaultMicrons(grinder, click);
   return um === null ? null : { um, source: "default" };
 };
