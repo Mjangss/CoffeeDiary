@@ -82,9 +82,10 @@ export const cancelBrewRecord = (payload: PersistedPayload, recordId: string): P
   const stock = inventory.find(item => item.id === record.inventoryId);
   if (!stock) throw new Error("연결된 재고를 찾을 수 없어 추출을 취소할 수 없습니다.");
   if (!Number.isFinite(stock.remainingWeight) || stock.remainingWeight < 0) throw new Error("재고 잔량을 확인할 수 없습니다.");
-  const originalDebit = inventory.some(item => item.manualLogs?.some(log =>
-    log.recordId === recordId && log.type === "DEC" && log.reason === "추출에 의한 자동 차감"));
-  if (!originalDebit || !Number.isFinite(record.dose) || record.dose <= 0) {
+  const recordNetDebit = (stock.manualLogs ?? [])
+    .filter(log => log.recordId === recordId)
+    .reduce((total, log) => total + (log.type === "DEC" ? log.amount : -log.amount), 0);
+  if (!Number.isFinite(record.dose) || record.dose <= 0 || round(recordNetDebit, 10) !== round(record.dose, 10)) {
     throw new Error("이 기록의 자동 차감 이력을 확인할 수 없습니다. 재고를 수동으로 정정해 주세요.");
   }
   const remainingWeight = round(stock.remainingWeight + record.dose, 10);

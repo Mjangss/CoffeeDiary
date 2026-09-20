@@ -74,6 +74,15 @@ test("explicit extraction cancellation restores stock only with linked debit his
   assert.equal(legacy.inventory[0].remainingWeight, 80);
 });
 
+test("cancellation restores a record linked to inventory after creation", () => {
+  const withoutInventory = saveBrewRecord(payload(), { ...record("r1", 20, 4), inventoryId: undefined });
+  const linked = saveBrewRecord(withoutInventory, record("r1", 20, 4, "a"));
+  assert.equal(linked.inventory[0].remainingWeight, 80);
+  const cancelled = cancelBrewRecord(linked, "r1");
+  assert.equal(cancelled.inventory[0].remainingWeight, 100);
+  assert.equal(cancelled.records.length, 0);
+});
+
 test("insufficient stock rejects correction without mutating prior data", () => {
   const created = saveBrewRecord(payload(), record("r1", 20, 4));
   assert.throws(() => saveBrewRecord(created, record("r1", 101, 4)), /사용량/);
