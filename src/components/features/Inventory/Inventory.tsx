@@ -207,7 +207,7 @@ const Inventory: React.FC = () => {
                     else if (item.status === "DEPLETED" || item.remainingWeight === 0) statusBadge = <span className="bg-zinc-800 text-[var(--text-muted)] border border-[var(--border-hover)] px-2 py-0.5 text-[10px] font-bold">DEPLETED</span>;
 
                     const matchingBean = beans.find(bean => bean.id === item.beanId);
-                    const agingStatus = matchingBean ? getAgingStatus({ ...matchingBean, roastingDate: item.roastDate }) : "NOT_SET";
+                    const agingStatus = matchingBean ? getAgingStatus({ ...matchingBean, roastingDate: item.roastDate }, restDiff) : "NOT_SET";
 
                     return (
                       <SwipeableRow
