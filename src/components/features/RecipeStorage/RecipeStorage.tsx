@@ -19,7 +19,7 @@ import GlitchButton from "../../common/GlitchButton";
 import SwipeableRow from "../../common/SwipeableRow";
 import TacticalNumericInput from "../../common/TacticalNumericInput";
 import TacticalSortMenu from "../../common/TacticalSortMenu";
-import { validMeasure, validPourTime, validRecipeTimeline } from "../../../utils/validation";
+import { activeRecipePours, validMeasure, validPourTime, validRecipeTimeline } from "../../../utils/validation";
 
 const MINUTE_OPTIONS = Array.from({ length: 11 }, (_, i) => i);
 const SECOND_OPTIONS = Array.from({ length: 60 }, (_, i) => i);
@@ -120,8 +120,7 @@ const RecipeStorage: React.FC = () => {
     if (recipeDoseError || recipeForm.pours.some(pourError) || timelineError) return;
     
     // Filter out invalid pours and SORT them by start time to ensure consistency
-    const finalPours = recipeForm.pours
-      .filter(p => !(p.start === "00:00" && p.end === "00:00" && p.waterMl === 0))
+    const finalPours = activeRecipePours(recipeForm.pours)
       .sort((a, b) => {
         const aSec = parseTimeToSeconds(a.start);
         const bSec = parseTimeToSeconds(b.start);

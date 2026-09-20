@@ -19,8 +19,11 @@ const clockSeconds = (clock: string) => {
 
 export const validPourTime = (start: string, end: string) => clockSeconds(start) < clockSeconds(end);
 
+export const activeRecipePours = <T extends { start: string; end: string; waterMl: number }>(pours: T[]) =>
+  pours.filter(pour => !(pour.end === "00:00" && pour.waterMl === 0));
+
 export const validRecipeTimeline = (pours: Array<{ start: string; end: string; waterMl: number }>) => {
-  const active = pours.filter(pour => !(pour.start === "00:00" && pour.end === "00:00" && pour.waterMl === 0));
+  const active = activeRecipePours(pours);
   if (!active.length) return "최소 한 단계 이상의 타임라인이 필요합니다.";
   for (const pour of active) {
     if (!validPourTime(pour.start, pour.end)) return "각 단계의 시작 시간은 종료 시간보다 빨라야 합니다.";

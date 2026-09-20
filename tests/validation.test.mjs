@@ -6,7 +6,7 @@ const output = await build({
   entryPoints: ["src/utils/validation.ts"],
   bundle: true, platform: "node", format: "esm", write: false, logLevel: "silent",
 });
-const { validMeasure, validGrinderRange, validStockOutflow, validPourTime, validRecipeTimeline } = await import(
+const { activeRecipePours, validMeasure, validGrinderRange, validStockOutflow, validPourTime, validRecipeTimeline } = await import(
   `data:text/javascript;base64,${Buffer.from(output.outputFiles[0].text).toString("base64")}`
 );
 
@@ -44,4 +44,16 @@ test("recipe timelines reject empty, reversed and overlapping stages", () => {
     { start: "00:00", end: "00:45", waterMl: 0 },
     { start: "00:45", end: "01:30", waterMl: 60 },
   ]), "");
+});
+
+test("recipe timelines ignore only auto-filled tail rows", () => {
+  const pours = [
+    { start: "00:00", end: "00:45", waterMl: 40 },
+    { start: "00:45", end: "01:30", waterMl: 0 },
+    { start: "01:30", end: "00:00", waterMl: 0 },
+    { start: "00:00", end: "00:00", waterMl: 0 },
+  ];
+  assert.equal(activeRecipePours(pours).length, 2);
+  assert.equal(validRecipeTimeline(pours), "");
+  assert.match(validRecipeTimeline([{ start: "01:00", end: "00:00", waterMl: 10 }]), /시작/);
 });
