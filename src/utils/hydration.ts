@@ -182,7 +182,7 @@ export const hydratePersistedData = (
       restDays: safeNum(record.restDays, 0),
       brewSec: safeNum(record.brewSec, 0),
       recipe: String(record.recipe ?? ""),
-      recipeId: recipe?.id,
+      recipeId: recipe?.id ?? (record.recipeSnapshot && record.recipeId ? String(record.recipeId) : undefined),
       recipeSnapshot: record.recipeSnapshot ?? (recipe ? recipeSnapshot(recipe) : undefined),
       baseClick: safeNum(record.baseClick, 1.5),
       memo: String(record.memo ?? ""),

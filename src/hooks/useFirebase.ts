@@ -8,7 +8,7 @@ import { CLOUD_DOC_KEY, DATA_SCHEMA_VERSION, DEFAULT_SETTINGS, STORAGE_KEY } fro
 import { describeAuthError, describeCloudError } from "../utils";
 import { deepClean } from "../utils/hydration";
 import { CloudConflictError, CloudSyncQueue, type PendingCloudChange, type SyncPhase } from "../lib/cloudSyncQueue";
-import { hasDiaryData, parseAndMigratePayload } from "../lib/localDiary";
+import { hasDiaryData, parseAndMigratePayload, serializeDiary } from "../lib/localDiary";
 import type { PersistedPayload } from "../types";
 
 type RemoteSnapshot = { data: Record<string, unknown>; revision: number };
@@ -128,7 +128,9 @@ export const useFirebase = () => {
           return nextRevision;
         });
       },
-      persist: (uid, change) => localStorage.setItem(pendingKey(uid), JSON.stringify(change)),
+      persist: (uid, change) => localStorage.setItem(pendingKey(uid), JSON.stringify({
+        ...change, payload: JSON.parse(serializeDiary(change.payload)),
+      })),
       clear: (uid) => localStorage.removeItem(pendingKey(uid)),
       report,
     });

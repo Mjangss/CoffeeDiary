@@ -48,3 +48,12 @@ test("current cloud rows hydrate without reconstruction", () => {
   assert.deepEqual(result.recipes, recipes);
   assert.deepEqual(result.inventory, inventory);
 });
+
+test("legacy pending rows keep a deleted recipe link when its snapshot remains", () => {
+  const result = restore({
+    records: [{ id: "record", bean: "bean", recipe: "deleted", recipeId: "recipe-1", recipeSnapshot: { name: "deleted", dose: 18 } }],
+    recipes: [],
+  });
+  assert.equal(result.records[0].recipeId, "recipe-1");
+  assert.equal(result.records[0].recipeSnapshot.name, "deleted");
+});

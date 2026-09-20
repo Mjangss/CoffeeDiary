@@ -145,7 +145,7 @@ const BrewingForm: React.FC = () => {
       setLedgerError("수정할 기록을 찾을 수 없습니다.");
       return;
     }
-    const existingSnapshot = originalRecord?.recipeId === selectedRecipeInfo?.id
+    const existingSnapshot = originalRecord?.recipeId && brewForm.selectedRecipeId === originalRecord.recipeId
       ? originalRecord?.recipeSnapshot : undefined;
     const recipeSnapshot = existingSnapshot ?? (selectedRecipeInfo ? {
           name: selectedRecipeInfo.name, method: selectedRecipeInfo.method, drinkType: selectedRecipeInfo.drinkType,
@@ -173,7 +173,7 @@ const BrewingForm: React.FC = () => {
       restDays: brewForm.restDays,
       brewSec: brewForm.brewSec,
       recipe: recipeSnapshot?.name ?? (brewForm.recipe || ""),
-      recipeId: selectedRecipeInfo?.id,
+      recipeId: selectedRecipeInfo?.id ?? (existingSnapshot ? originalRecord?.recipeId : undefined),
       recipeSnapshot,
       baseClick: baseClickToSave,
       memo: brewForm.memo.trim(),
