@@ -218,7 +218,7 @@ export const useFirebase = () => {
     setCloudStatusVisual("loading");
     void (async () => {
       try {
-        const remote = await readRemote(uid);
+        const remote = await withinCloudWait(readRemote(uid));
         if (!alive || activeUid.current !== uid) return;
         const pending = readPending(uid);
         if (pending) {
@@ -356,14 +356,17 @@ export const useFirebase = () => {
   const loadFromCloud = async (options?: { withVisual?: boolean }) => {
     if (!user || !db) return;
     const uid = user.uid;
-    await queue.waitForWrite();
+    if (!await queue.waitForWrite(CLOUD_WAIT_MS)) {
+      report("error", new Error("cloud-timeout"));
+      return;
+    }
     if (activeUid.current !== uid) return;
     if (options?.withVisual) {
       setCloudStatus("클라우드 불러오는 중...");
       setCloudStatusVisual("loading");
     }
     try {
-      const remote = await readRemote(uid);
+      const remote = await withinCloudWait(readRemote(uid));
       if (activeUid.current !== uid) return;
       if (!remote) {
         setCloudStatus("클라우드 데이터 없음");
